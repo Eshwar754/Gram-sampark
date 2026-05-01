@@ -1,0 +1,753 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gram-Sampark | Rural Health Records</title>
+    <link rel="icon" href="xicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="style.css">
+    <link rel="manifest" href="manifest.json">
+
+    <meta name="google" value="notranslate">
+</head>
+
+<body>
+    <div class="page-shell">
+        <div class="gravity-ring"></div>
+        <div class="gravity-ring-two"></div>
+        <div class="gravity-ring-three"></div>
+        <div class="ambient ambient-one"></div>
+        <div class="ambient ambient-two"></div>
+        <div class="ambient ambient-three"></div>
+        <div id="cursor-glow" class="cursor-glow"></div>
+
+        <div id="login-section" class="login-shell">
+            <div class="login-layout">
+                <section class="login-story">
+                    <div class="story-copy">
+                        <span class="eyebrow">Rural Health Records Platform</span>
+                        <h1>Connecting Villages Digitally</h1>
+                        <p>Secure access to rural health and citizen records through a modern field-ready platform for
+                            survey teams, village administrators, and public service leaders.</p>
+                    </div>
+
+                    <div class="story-metrics">
+                        <article class="story-metric">
+                            <span>Field Ready</span>
+                            <strong>Offline-friendly workflows</strong>
+                        </article>
+                        <article class="story-metric">
+                            <span>Public Impact</span>
+                            <strong>Health, welfare, and village insights</strong>
+                        </article>
+                        <article class="story-metric">
+                            <span>Trusted Access</span>
+                            <strong>Role-based records management</strong>
+                        </article>
+                    </div>
+
+                    <div class="login-collage">
+                        <article class="collage-card collage-large" style="background-image: url('survey_1.png');">
+                            <div class="collage-overlay">
+                                <span>Healthcare Camps</span>
+                                <strong>Community-first service delivery</strong>
+                            </div>
+                        </article>
+                        <article class="collage-card" style="background-image: url('survey_2.png');">
+                            <div class="collage-overlay">
+                                <span>Village Survey</span>
+                                <strong>Data captured with care</strong>
+                            </div>
+                        </article>
+                        <article class="collage-card" style="background-image: url('survey_3.png');">
+                            <div class="collage-overlay">
+                                <span>Digital Outreach</span>
+                                <strong>Local governance made smarter</strong>
+                            </div>
+                        </article>
+                        <article class="collage-card collage-tall" style="background-image: url('survey_4.png');">
+                            <div class="collage-overlay">
+                                <span>Rural Empowerment</span>
+                                <strong>Inclusive records for every household</strong>
+                            </div>
+                        </article>
+                    </div>
+                </section>
+
+                <section class="login-panel">
+                    <div class="login-panel-stack">
+                        <div class="login-top-brand">
+                            <img src="gram_sampark.svg" alt="Gram-Sampark | Rural Health Records">
+                        </div>
+
+                        <div class="login-panel-inner glass-panel">
+                            <div class="login-brand">
+                                <div>
+                                    <h2 id="auth-title">Sign in to your account</h2>
+                                    <p class="brand-subtitle">Secure access to rural health and citizen records</p>
+                                </div>
+                            </div>
+
+                            <form id="login-form" class="auth-form">
+                                <div class="form-group input-with-icon">
+                                    <label for="email">Email address</label>
+                                    <div class="input-shell">
+                                        <span class="input-icon" aria-hidden="true">
+                                            <svg viewBox="0 0 24 24" fill="none">
+                                                <path
+                                                    d="M4 6.75h16v10.5a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 17.25V6.75Z"
+                                                    stroke="currentColor" stroke-width="1.6" />
+                                                <path d="m4.5 7.5 7.004 5.253a.833.833 0 0 0 .992 0L19.5 7.5"
+                                                    stroke="currentColor" stroke-width="1.6" stroke-linecap="round"
+                                                    stroke-linejoin="round" />
+                                            </svg>
+                                        </span>
+                                        <input type="email" id="email" required placeholder="name@example.com">
+                                    </div>
+                                </div>
+
+                                <div class="form-group input-with-icon">
+                                    <label for="password">Password</label>
+                                    <div class="input-shell">
+                                        <span class="input-icon" aria-hidden="true">
+                                            <svg viewBox="0 0 24 24" fill="none">
+                                                <path d="M8 10V7.75a4 4 0 1 1 8 0V10" stroke="currentColor"
+                                                    stroke-width="1.6" stroke-linecap="round" />
+                                                <rect x="5" y="10" width="14" height="10" rx="2" stroke="currentColor"
+                                                    stroke-width="1.6" />
+                                            </svg>
+                                        </span>
+                                        <input type="password" id="password" required autocomplete="current-password"
+                                            placeholder="••••••••">
+                                    </div>
+                                </div>
+
+                                <button type="submit" id="auth-btn" class="auth-submit">Continue</button>
+                            </form>
+
+                            <div class="auth-footer">
+                                <a href="#" id="toggle-auth">Create a new account</a>
+                                <div id="login-msg"></div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </div>
+
+        <section id="pending-section" class="pending-shell" style="display: none;">
+            <div class="pending-card glass-panel">
+                <span class="eyebrow">Approval Workflow</span>
+                <h2 id="pending-title">Account Pending Approval</h2>
+                <p id="pending-msg">Your account has been created successfully but is awaiting admin approval.</p>
+                <div id="reactivation-container" class="pending-actions" style="display: none;">
+                    <button id="request-reactivation-btn">Request Re-activation</button>
+                </div>
+                <div id="pending-status-msg"></div>
+            </div>
+        </section>
+
+        <input type="checkbox" id="sidebar-toggle" class="sidebar-toggle" aria-hidden="true">
+
+        <div id="app-container" class="app-shell" style="display: none;">
+            <header class="app-header">
+                <div class="header-content">
+                    <div class="header-left">
+                        <label for="sidebar-toggle" class="menu-toggle" aria-label="Toggle navigation">
+                            <span></span>
+                            <span></span>
+                            <span></span>
+                        </label>
+                        <div class="header-brand">
+                            <img src="xicon.svg" alt="Gram-Sampark Logo" class="header-logo">
+                            <div class="header-brand-copy">
+                                <strong>Gram-Sampark</strong>
+                                <span>Rural Health Records</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="header-right">
+                        <div class="user-badge">
+                            <span class="user-badge-icon">GS</span>
+                            <span id="user-info"></span>
+                        </div>
+                        <button id="logout-btn" class="secondary btn-sm" style="display: none;">Sign out</button>
+                    </div>
+                </div>
+            </header>
+
+            <div class="app-layout">
+                <label for="sidebar-toggle" class="sidebar-backdrop"></label>
+
+                <aside class="sidebar">
+                    <div class="sidebar-top">
+                        <span class="sidebar-label">Navigation</span>
+                        <p>Access dashboards, village workflows, and citizen records from a single workspace.</p>
+                    </div>
+                    <nav class="tab-navigation" id="main-nav"></nav>
+                    <div class="sidebar-foot">
+                        <div class="sidebar-support-card">
+                            <span>Field operations</span>
+                            <strong>Secure. Responsive. Ready for survey teams.</strong>
+                        </div>
+                    </div>
+                </aside>
+
+                <main class="content-area">
+                    <section class="hero-strip">
+                        <div>
+                            <span class="eyebrow">Operations Console</span>
+                            <h1>Rural health intelligence, beautifully organized.</h1>
+                            <p>Track villages, manage access, collect structured survey data, and review records through
+                                a modern government-tech dashboard.</p>
+                        </div>
+                        <div id="status-indicator"></div>
+                    </section>
+
+                    <div id="panel-admin-dashboard" class="tab-panel">
+                        <section class="panel-card">
+                            <div class="section-heading">
+                                <div>
+                                    <span class="eyebrow">Overview</span>
+                                    <h2>System Analytics</h2>
+                                </div>
+                            </div>
+
+                            <div class="dashboard-grid dashboard-grid-stats" id="admin-stats-grid">
+                                <div class="stat-card">
+                                    <div class="stat-icon teal">
+                                        <svg viewBox="0 0 24 24" fill="none">
+                                            <path d="M4 19h16M6.5 17V9.5L12 5l5.5 4.5V17" stroke="currentColor"
+                                                stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+                                        </svg>
+                                    </div>
+                                    <h3>Total Villages</h3>
+                                    <div class="value" id="stat-total-villages">0</div>
+                                </div>
+                                <div class="stat-card">
+                                    <div class="stat-icon aqua">
+                                        <svg viewBox="0 0 24 24" fill="none">
+                                            <path d="M12 20a7 7 0 1 0 0-14 7 7 0 0 0 0 14Z" stroke="currentColor"
+                                                stroke-width="1.8" />
+                                            <path
+                                                d="M12 10.5a2 2 0 1 0 0-4 2 2 0 0 0 0 4ZM8.5 18c.5-2.5 2-3.75 3.5-3.75S15 15.5 15.5 18"
+                                                stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+                                        </svg>
+                                    </div>
+                                    <h3>Total Villagers</h3>
+                                    <div class="value" id="stat-total-patients">0</div>
+                                </div>
+                                <div class="stat-card">
+                                    <div class="stat-icon amber">
+                                        <svg viewBox="0 0 24 24" fill="none">
+                                            <path
+                                                d="M8 11a4 4 0 1 1 0-8 4 4 0 0 1 0 8ZM16 13a3 3 0 1 1 0-6 3 3 0 0 1 0 6ZM3 20a5 5 0 0 1 10 0M13 20a4 4 0 0 1 8 0"
+                                                stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+                                        </svg>
+                                    </div>
+                                    <h3>Registered Users</h3>
+                                    <div class="value" id="stat-total-users">0</div>
+                                </div>
+                            </div>
+                        </section>
+
+                        <div class="split-panels">
+                            <section class="panel-card">
+                                <div class="section-heading">
+                                    <div>
+                                        <span class="eyebrow">Approvals</span>
+                                        <h2>Pending Users</h2>
+                                    </div>
+                                </div>
+                                <div id="pending-users-list" class="list-container"></div>
+                            </section>
+
+                            <section class="panel-card">
+                                <div class="section-heading">
+                                    <div>
+                                        <span class="eyebrow">Access Control</span>
+                                        <h2>Village Requests</h2>
+                                    </div>
+                                </div>
+                                <div id="village-requests-list" class="list-container"></div>
+                            </section>
+                        </div>
+                    </div>
+
+                    <div id="panel-admin-manage" class="tab-panel">
+                        <div class="stacked-panels">
+                            <section class="panel-card">
+                                <div class="section-heading">
+                                    <div>
+                                        <span class="eyebrow">Village Registry</span>
+                                        <h2>Manage Villages</h2>
+                                    </div>
+                                </div>
+
+                                <form id="village-form" class="inline-form">
+                                    <div class="form-group">
+                                        <label for="village_name">Village Name</label>
+                                        <input type="text" id="village_name" required placeholder="Enter name">
+                                    </div>
+                                    <button type="submit">Create</button>
+                                </form>
+
+                                <div id="admin-msg"></div>
+
+                                <div class="section-subhead">
+                                    <h3>Existing Villages</h3>
+                                </div>
+                                <div id="village-list" class="list-container"></div>
+                            </section>
+
+                            <section class="panel-card">
+                                <div class="section-heading">
+                                    <div>
+                                        <span class="eyebrow">Approved Accounts</span>
+                                        <h2>System Users</h2>
+                                    </div>
+                                </div>
+                                <div id="approved-users-list" class="list-container"></div>
+                            </section>
+                        </div>
+                    </div>
+
+                    <div id="panel-user-dashboard" class="tab-panel">
+                        <section class="panel-card">
+                            <div class="section-heading">
+                                <div>
+                                    <span class="eyebrow">My Workspace</span>
+                                    <h2>Assigned Villages</h2>
+                                </div>
+                            </div>
+
+                            <div class="field-grid compact-grid">
+                                <div class="form-group">
+                                    <label for="active-village-select">Target Village for Current Session</label>
+                                    <select id="active-village-select">
+                                        <option value="">Select Village...</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="dashboard-grid" id="user-village-stats"></div>
+                        </section>
+                    </div>
+
+                    <div id="panel-user-request" class="tab-panel">
+                        <section class="panel-card">
+                            <div class="section-heading">
+                                <div>
+                                    <span class="eyebrow">Requests</span>
+                                    <h2>Request Village Access</h2>
+                                </div>
+                            </div>
+
+                            <div class="request-toolbar">
+                                <div class="form-group">
+                                    <label for="request-village-select">Select Village</label>
+                                    <select id="request-village-select">
+                                        <option value="">Loading villages...</option>
+                                    </select>
+                                </div>
+                                <button id="submit-request-btn">Submit Request</button>
+                            </div>
+
+                            <div id="request-msg"></div>
+
+                            <div class="section-subhead">
+                                <h3>My Pending Requests</h3>
+                            </div>
+                            <div id="my-requests-list" class="list-container"></div>
+                        </section>
+                    </div>
+
+                    <div id="panel-add-data" class="tab-panel">
+                        <div class="active-village-banner" id="form-village-banner" style="display: none;">
+                            <span class="banner-dot"></span>
+                            <span>Targeting Village: <strong id="form-target-village">None</strong></span>
+                        </div>
+
+                        <section id="patient-form-section" class="panel-card">
+                            <div class="section-heading">
+                                <div>
+                                    <span class="eyebrow">Structured Survey Workflow</span>
+                                    <h2>Survey Data Entry</h2>
+                                </div>
+                            </div>
+
+                            <form id="patient-form">
+                                <input type="hidden" id="docId">
+
+                                <div class="multi-step-container">
+                                    <aside class="step-sidebar">
+                                        <div class="step-sidebar-card">
+                                            <span class="eyebrow">Form Steps</span>
+                                            <div class="step-indicator">
+                                                <div class="step active" id="step1-indicator" data-step="1">Personal
+                                                </div>
+                                                <div class="step" id="step2-indicator" data-step="2">Family</div>
+                                                <div class="step" id="step3-indicator" data-step="3">Health</div>
+                                                <div class="step" id="step4-indicator" data-step="4">Location</div>
+                                                <div class="step" id="step5-indicator" data-step="5">Employment</div>
+                                                <div class="step" id="step6-indicator" data-step="6">Economic</div>
+                                                <div class="step" id="step7-indicator" data-step="7">Facilities</div>
+                                                <div class="step" id="step8-indicator" data-step="8">Education</div>
+                                            </div>
+                                        </div>
+                                    </aside>
+
+                                    <div class="step-content">
+                                        <div class="form-step" id="step-1">
+                                            <div class="form-step-header">
+                                                <h3>Personal Details</h3>
+                                                <p>Capture the resident's basic profile and core contact information.
+                                                </p>
+                                            </div>
+                                            <div class="field-grid">
+                                                <div class="form-group">
+                                                    <label for="name">Full Name</label>
+                                                    <input type="text" id="name" required>
+                                                </div>
+                                                <div class="form-group">
+                                                    <label for="mobile">Mobile Number</label>
+                                                    <input type="tel" id="mobile" required pattern="[0-9]{10}">
+                                                </div>
+                                                <div class="form-group">
+                                                    <label for="patient_email">Email Address</label>
+                                                    <input type="email" id="patient_email">
+                                                </div>
+                                                <div class="form-group">
+                                                    <label for="dob">Date of Birth</label>
+                                                    <input type="date" id="dob" required>
+                                                </div>
+                                                <div class="form-group">
+                                                    <label for="caste">Caste / Category</label>
+                                                    <input type="text" id="caste" required>
+                                                </div>
+                                                <div class="form-group">
+                                                    <label for="gender">Gender</label>
+                                                    <select id="gender" required>
+                                                        <option value="">Select</option>
+                                                        <option value="Male">Male</option>
+                                                        <option value="Female">Female</option>
+                                                        <option value="Other">Other</option>
+                                                    </select>
+                                                </div>
+                                                <div class="form-group">
+                                                    <label for="marital_status">Marital Status</label>
+                                                    <select id="marital_status" required>
+                                                        <option value="">Select</option>
+                                                        <option value="Single">Single</option>
+                                                        <option value="Married">Married</option>
+                                                        <option value="Widowed">Widowed</option>
+                                                        <option value="Divorced">Divorced</option>
+                                                    </select>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div class="form-step" id="step-2" style="display: none;">
+                                            <div class="form-step-header">
+                                                <h3>Family Details</h3>
+                                                <p>Add individual household members and relationship details.</p>
+                                            </div>
+                                            <div id="family-members-container" class="family-members-stack"></div>
+                                            <button type="button" id="add-family-btn" class="secondary">Add Family
+                                                Member</button>
+                                        </div>
+
+                                        <div class="form-step" id="step-3" style="display: none;">
+                                            <div class="form-step-header">
+                                                <h3>Health Care</h3>
+                                                <p>Record long-term health conditions and access to care.</p>
+                                            </div>
+                                            <div class="field-grid">
+                                                <div class="form-group">
+                                                    <label for="chronic_disease">Chronic Diseases</label>
+                                                    <input type="text" id="chronic_disease">
+                                                </div>
+                                                <div class="form-group">
+                                                    <label for="vaccination_status">Vaccination Status</label>
+                                                    <input type="text" id="vaccination_status" required>
+                                                </div>
+                                                <div class="form-group field-span-2">
+                                                    <label for="nearest_healthcare">Nearest Health Facility</label>
+                                                    <input type="text" id="nearest_healthcare" required>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div class="form-step" id="step-4" style="display: none;">
+                                            <div class="form-step-header">
+                                                <h3>Location</h3>
+                                                <p>Link the profile to its village and local governance geography.</p>
+                                            </div>
+                                            <div class="field-grid">
+                                                <div class="form-group">
+                                                    <label for="village">Village Name</label>
+                                                    <div id="village-input-container"></div>
+                                                </div>
+                                                <div class="form-group">
+                                                    <label for="gram_panchayat">Gram Panchayat</label>
+                                                    <input type="text" id="gram_panchayat">
+                                                </div>
+                                                <div class="form-group">
+                                                    <label for="district">District</label>
+                                                    <input type="text" id="district" required>
+                                                </div>
+                                                <div class="form-group">
+                                                    <label for="taluk">Taluk</label>
+                                                    <input type="text" id="taluk">
+                                                </div>
+                                                <div class="form-group">
+                                                    <label for="state">State</label>
+                                                    <input type="text" id="state" value="Karnataka" readonly required>
+                                                </div>
+                                                <div class="form-group">
+                                                    <label for="pincode">Pin Code</label>
+                                                    <input type="text" id="pincode" required pattern="[0-9]{6}">
+                                                </div>
+                                                <div class="form-group field-span-2">
+                                                    <label for="landmark">Landmark</label>
+                                                    <input type="text" id="landmark">
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div class="form-step" id="step-5" style="display: none;">
+                                            <div class="form-step-header">
+                                                <h3>Employment</h3>
+                                                <p>Understand household livelihoods, land use, and agriculture details.
+                                                </p>
+                                            </div>
+                                            <div class="field-grid compact-grid">
+                                                <div class="form-group">
+                                                    <label for="is_employed">Status</label>
+                                                    <select id="is_employed" required>
+                                                        <option value="">Select</option>
+                                                        <option value="Yes">Employed</option>
+                                                        <option value="No">Unemployed</option>
+                                                    </select>
+                                                </div>
+                                                <div class="form-group" id="employment-sector-container"
+                                                    style="display: none;">
+                                                    <label for="sector">Sector</label>
+                                                    <select id="sector">
+                                                        <option value="">Select</option>
+                                                        <option value="Government">Government</option>
+                                                        <option value="Private">Private</option>
+                                                        <option value="Farmer">Farmer</option>
+                                                        <option value="Other">Other</option>
+                                                    </select>
+                                                </div>
+                                            </div>
+
+                                            <div id="farmer-details-container" class="nested-card"
+                                                style="display: none;">
+                                                <h4>Farmer Details</h4>
+                                                <div class="field-grid compact-grid">
+                                                    <div class="form-group">
+                                                        <label for="owns_land">Owns Land?</label>
+                                                        <select id="owns_land">
+                                                            <option value="">Select</option>
+                                                            <option value="Yes">Yes</option>
+                                                            <option value="No">No</option>
+                                                        </select>
+                                                    </div>
+                                                </div>
+                                                <div id="land-details-container" class="field-grid"
+                                                    style="display: none;">
+                                                    <div class="form-group">
+                                                        <label for="acres">Total Acres</label>
+                                                        <input type="number" step="0.01" id="acres">
+                                                    </div>
+                                                    <div class="form-group">
+                                                        <label for="sown">Crops Sown</label>
+                                                        <input type="text" id="sown">
+                                                    </div>
+                                                    <div class="form-group field-span-2">
+                                                        <label for="expected_yield">Expected Yield
+                                                            (Quintals/Tons)</label>
+                                                        <input type="text" id="expected_yield">
+                                                    </div>
+                                                </div>
+                                                <div class="form-group">
+                                                    <label for="livestocks">Livestock Details</label>
+                                                    <input type="text" id="livestocks">
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div class="form-step" id="step-6" style="display: none;">
+                                            <div class="form-step-header">
+                                                <h3>Economic</h3>
+                                                <p>Record annual income and declared taxation preference.</p>
+                                            </div>
+                                            <div class="field-grid">
+                                                <div class="form-group">
+                                                    <label for="annual_income">Annual Income (₹)</label>
+                                                    <input type="number" id="annual_income" required>
+                                                </div>
+                                                <div class="form-group">
+                                                    <label for="tax_regime">Tax Regime</label>
+                                                    <select id="tax_regime" required>
+                                                        <option value="">Select</option>
+                                                        <option value="Old Regime">Old Regime</option>
+                                                        <option value="New Regime">New Regime</option>
+                                                    </select>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div class="form-step" id="step-7" style="display: none;">
+                                            <div class="form-step-header">
+                                                <h3>Facilities</h3>
+                                                <p>Assess infrastructure, connectivity, and access to essential
+                                                    services.</p>
+                                            </div>
+                                            <div class="field-grid">
+                                                <div class="form-group">
+                                                    <label for="road_access">Road Access</label>
+                                                    <select id="road_access" required>
+                                                        <option value="">Select</option>
+                                                        <option value="Paved">Paved</option>
+                                                        <option value="Unpaved">Unpaved</option>
+                                                        <option value="None">None</option>
+                                                    </select>
+                                                </div>
+                                                <div class="form-group">
+                                                    <label for="internet">Internet</label>
+                                                    <select id="internet">
+                                                        <option value="Good">Good</option>
+                                                        <option value="Poor">Poor</option>
+                                                        <option value="None">None</option>
+                                                    </select>
+                                                </div>
+                                                <div class="form-group">
+                                                    <label for="transport">Public Transport?</label>
+                                                    <select id="transport">
+                                                        <option value="Yes">Yes</option>
+                                                        <option value="No">No</option>
+                                                    </select>
+                                                </div>
+                                                <div class="form-group">
+                                                    <label for="distance_hospital">Distance to Hospital (km)</label>
+                                                    <input type="number" step="0.1" id="distance_hospital">
+                                                </div>
+                                                <div class="form-group">
+                                                    <label for="distance_school">Distance to School (km)</label>
+                                                    <input type="number" step="0.1" id="distance_school">
+                                                </div>
+                                                <div class="form-group">
+                                                    <label for="distance_market">Distance to Market (km)</label>
+                                                    <input type="number" step="0.1" id="distance_market">
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div class="form-step" id="step-8" style="display: none;">
+                                            <div class="form-step-header">
+                                                <h3>Education</h3>
+                                                <p>Collect learning outcomes and school participation indicators.</p>
+                                            </div>
+                                            <div class="field-grid">
+                                                <div class="form-group">
+                                                    <label for="qualification">Highest Qualification</label>
+                                                    <input type="text" id="qualification" required>
+                                                </div>
+                                                <div class="form-group">
+                                                    <label for="children_school">Children Attending School?</label>
+                                                    <select id="children_school">
+                                                        <option value="">Select</option>
+                                                        <option value="Yes">Yes</option>
+                                                        <option value="No">No</option>
+                                                        <option value="N/A">N/A</option>
+                                                    </select>
+                                                </div>
+                                                <div class="form-group" id="school-type-container"
+                                                    style="display: none;">
+                                                    <label for="school_type">School Type</label>
+                                                    <select id="school_type">
+                                                        <option value="Government">Government</option>
+                                                        <option value="Private">Private</option>
+                                                    </select>
+                                                </div>
+                                                <div class="form-group">
+                                                    <label for="dropouts">Any School Dropouts?</label>
+                                                    <select id="dropouts">
+                                                        <option value="Yes">Yes</option>
+                                                        <option value="No">No</option>
+                                                    </select>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div class="form-actions">
+                                            <button type="button" id="prev-btn" class="secondary"
+                                                style="display: none;">Back</button>
+                                            <div class="form-actions-group">
+                                                <button type="button" id="clear-btn" class="secondary">Clear
+                                                    Form</button>
+                                                <button type="button" id="next-btn">Continue</button>
+                                                <button type="submit" id="submit-btn" style="display: none;">Submit
+                                                    Data</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </form>
+                            <div id="form-msg"></div>
+                        </section>
+                    </div>
+
+                    <div id="panel-view-data" class="tab-panel">
+                        <section class="panel-card">
+                            <div class="section-heading">
+                                <div>
+                                    <span class="eyebrow">Searchable Records</span>
+                                    <h2>Village Records</h2>
+                                </div>
+
+                                <div class="records-toolbar">
+                                    <select id="filter-village-select">
+                                        <option value="">All Villages</option>
+                                    </select>
+                                    <div class="search-shell">
+                                        <svg viewBox="0 0 24 24" fill="none">
+                                            <circle cx="11" cy="11" r="6.5" stroke="currentColor" stroke-width="1.8" />
+                                            <path d="m16 16 4 4" stroke="currentColor" stroke-width="1.8"
+                                                stroke-linecap="round" />
+                                        </svg>
+                                        <input type="text" id="search-input" placeholder="Search records...">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div id="patient-list"></div>
+                        </section>
+                    </div>
+                </main>
+            </div>
+        </div>
+    </div>
+
+    <div id="general-modal" style="display:none;">
+        <div id="general-modal-content">
+            <button id="close-modal-btn" aria-label="Close modal">&times;</button>
+            <div id="modal-body-wrapper"></div>
+            <div id="patient-read-view" style="display: none;">
+                <h2 id="read-title"></h2>
+                <div id="read-grid"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="canvas-bg.js"></script>
+    <script type="module" src="app.js"></script>
+</body>
+
+</html>
