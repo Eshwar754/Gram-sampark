@@ -1885,8 +1885,15 @@ button.secondary:hover {
         padding: 1.5rem;
     }
 
-    .story-metrics, .login-collage {
+    .story-metrics {
         display: none;
+    }
+
+    .login-collage {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        grid-template-rows: repeat(2, 180px);
+        margin-top: 2rem;
     }
 
     .collage-large,
@@ -1966,7 +1973,8 @@ button.secondary:hover {
 
     .login-collage {
         grid-template-columns: 1fr;
-        grid-template-rows: repeat(4, 170px);
+        grid-template-rows: repeat(4, 180px);
+        margin-top: 1.5rem;
     }
 
     .login-panel-inner,
