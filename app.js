@@ -462,6 +462,10 @@ function setupTabs(tabs) {
             if (tab.id === 'panel-add-data') {
                 clearForm();
             }
+
+            // Close mobile sidebar after selection
+            const sidebarToggle = document.getElementById('sidebar-toggle');
+            if (sidebarToggle) sidebarToggle.checked = false;
         };
         mainNav.appendChild(btn);
 

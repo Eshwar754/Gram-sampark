@@ -266,13 +266,18 @@ button {
 .login-shell {
     min-height: 100vh;
     padding: 2rem;
+    display: flex;
+    flex-direction: column;
 }
 
 .login-layout {
+    width: 100%;
+    max-width: 1440px;
+    margin: auto;
     display: grid;
     grid-template-columns: minmax(0, 1.35fr) minmax(360px, 500px);
     gap: 2rem;
-    min-height: calc(100vh - 4rem);
+    min-height: 85vh;
 }
 
 .login-story {
@@ -676,7 +681,7 @@ button {
     width: 1.1rem;
     height: 2px;
     border-radius: 99px;
-    background: var(--text-dark);
+    background: var(--primary);
 }
 
 .header-brand {
@@ -1754,11 +1759,22 @@ button.secondary:hover {
 
 @media (max-width: 1180px) {
     .login-layout {
-        grid-template-columns: 1fr;
+        display: flex;
+        flex-direction: column;
+        gap: 1.5rem;
+        justify-content: center;
+    }
+
+    .login-panel, .login-story {
+        width: 100%;
     }
 
     .login-story {
-        min-height: 38rem;
+        min-height: auto;
+    }
+    
+    .story-copy h1 {
+        white-space: normal;
     }
 
     .app-layout {
@@ -1808,6 +1824,21 @@ button.secondary:hover {
     .multi-step-container {
         grid-template-columns: 1fr;
     }
+    
+    .step-indicator {
+        flex-direction: row;
+        overflow-x: auto;
+        padding-bottom: 0.5rem;
+        scrollbar-width: none;
+    }
+    
+    .step-indicator::-webkit-scrollbar {
+        display: none;
+    }
+    
+    .step {
+        flex: 0 0 auto;
+    }
 
     .split-panels,
     .story-metrics,
@@ -1832,12 +1863,11 @@ button.secondary:hover {
     }
 
     .login-story {
-        padding: 2rem;
+        padding: 1.5rem;
     }
 
-    .login-collage {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        grid-template-rows: repeat(2, 180px);
+    .story-metrics, .login-collage {
+        display: none;
     }
 
     .collage-large,
@@ -1845,16 +1875,10 @@ button.secondary:hover {
         grid-row: auto;
     }
 
-    .header-content,
     .hero-strip,
     .section-heading {
         align-items: flex-start;
         flex-direction: column;
-    }
-
-    .header-right {
-        width: 100%;
-        justify-content: space-between;
     }
 
     .field-grid,
@@ -1933,20 +1957,45 @@ button.secondary:hover {
         padding: 1.25rem;
     }
 
+    .header-content {
+        gap: 0.5rem;
+    }
+
+    .header-left, .header-right {
+        gap: 0.6rem;
+    }
+
+    .menu-toggle, .header-logo {
+        width: 2.6rem;
+        height: 2.6rem;
+    }
+
     .header-brand-copy span {
         display: none;
     }
 
+    .header-brand-copy strong {
+        font-size: 0.9rem;
+    }
+
     .user-badge {
         max-width: 100%;
+        padding: 0.3rem 0.5rem 0.3rem 0.3rem;
+        gap: 0.5rem;
+    }
+
+    .user-badge-icon {
+        width: 1.8rem;
+        height: 1.8rem;
     }
 
     .user-badge #user-info {
         display: inline-block;
-        max-width: 10rem;
+        max-width: 5.5rem;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
+        font-size: 0.85rem;
     }
 
     .login-top-brand {
