@@ -2261,5 +2261,40 @@ button.secondary:hover {
         font-size: 0.8rem !important;
     }
 }
+.village-tag {
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--primary);
+    margin-top: 0.35rem;
+    padding: 0.15rem 0.6rem;
+    background: rgba(15, 118, 110, 0.08);
+    border: 1px solid rgba(15, 118, 110, 0.12);
+    border-radius: 6px;
+    display: inline-flex;
+    align-items: center;
+}
 
+.mobile-tag {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    margin-top: 0.15rem;
+}
 
+.badge {
+    display: inline-flex;
+    padding: 0.25rem 0.75rem;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+}
+
+.badge-warning {
+    background: rgba(217, 119, 6, 0.1);
+    color: #D97706;
+}
+
+.badge-success {
+    background: rgba(22, 163, 74, 0.1);
+    color: #16A34A;
+}

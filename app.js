@@ -1,3 +1,4 @@
+import { collection, doc, setDoc, serverTimestamp } from "firebase/firestore";
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
 import {
     getAuth,
@@ -308,24 +309,114 @@ const toggleAuth = document.getElementById('toggle-auth');
 toggleAuth.addEventListener('click', (e) => {
     e.preventDefault();
     isLoginMode = !isLoginMode;
-    authTitle.textContent = isLoginMode ? 'Login' : 'Register';
-    authBtn.textContent = isLoginMode ? 'Login' : 'Sign Up';
-    toggleAuth.textContent = isLoginMode ? 'Need an account? Register here' : 'Already have an account? Login here';
+    authTitle.textContent = isLoginMode ? 'Sign in to your account' : 'Create your account';
+    authBtn.textContent = isLoginMode ? 'Continue' : 'Create Account';
+    toggleAuth.textContent = isLoginMode ? 'Create a new account' : 'Already have an account? Sign in';
+
+    const regFields = document.getElementById('registration-fields');
+    regFields.style.display = isLoginMode ? 'none' : 'flex';
+
+    // Toggle required attribute for signup fields
+    const signupInputs = regFields.querySelectorAll('input');
+    signupInputs.forEach(input => {
+        if (isLoginMode) {
+            input.removeAttribute('required');
+        } else {
+            input.setAttribute('required', '');
+        }
+    });
 });
+async function saveSurveyData(db, form) {
+
+    const citizenRef = doc(collection(db, "citizens"));
+    const citizenId = citizenRef.id;
+
+    // 1. Citizens
+    await setDoc(doc(db, "citizens", citizenId), {
+        name: form.name,
+        mobile: form.mobile,
+        email: form.patient_email,
+        dob: form.dob,
+        gender: form.gender,
+        caste: form.caste,
+        marital_status: form.marital_status,
+        createdAt: serverTimestamp()
+    });
+
+    // 2. Health
+    await setDoc(doc(db, "health_profiles", citizenId), {
+        chronic_disease: form.chronic_disease,
+        vaccination_status: form.vaccination_status,
+        nearest_healthcare: form.nearest_healthcare
+    });
+
+    // 3. Location
+    await setDoc(doc(db, "locations", citizenId), {
+        village: form.village,
+        gram_panchayat: form.gram_panchayat,
+        district: form.district,
+        taluk: form.taluk,
+        state: form.state,
+        pincode: form.pincode,
+        landmark: form.landmark
+    });
+
+    // 4. Economic
+    await setDoc(doc(db, "economic_profiles", citizenId), {
+        is_employed: form.is_employed,
+        sector: form.sector,
+        owns_land: form.owns_land,
+        acres: form.acres,
+        crops: form.sown,
+        expected_yield: form.expected_yield,
+        livestock: form.livestocks,
+        annual_income: form.annual_income,
+        tax_regime: form.tax_regime
+    });
+
+    // 5. Infrastructure
+    await setDoc(doc(db, "infrastructure_access", citizenId), {
+        road_access: form.road_access,
+        internet: form.internet,
+        transport: form.transport,
+        distance_hospital: form.distance_hospital,
+        distance_school: form.distance_school,
+        distance_market: form.distance_market
+    });
+
+    // 6. Education
+    await setDoc(doc(db, "education_profiles", citizenId), {
+        qualification: form.qualification,
+        children_school: form.children_school,
+        school_type: form.school_type,
+        dropouts: form.dropouts
+    });
+}
 
 loginForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     const email = document.getElementById('email').value.trim();
     const password = document.getElementById('password').value;
+
     try {
         if (isLoginMode) {
             await signInWithEmailAndPassword(auth, email, password);
         } else {
-            // Registration
+            // Registration details
+            const fullName = document.getElementById('signup-name').value.trim();
+            const mobile = document.getElementById('signup-mobile').value.trim();
+            const personalEmail = document.getElementById('signup-personal-email').value.trim();
+            const village = document.getElementById('signup-village').value.trim();
+
             const userCred = await createUserWithEmailAndPassword(auth, email, password);
-            // Auto create unapproved user doc
+
+            // Auto create unapproved user doc with extra details
             await setDoc(doc(db, 'users', userCred.user.uid), {
                 email: email,
+                fullName: fullName,
+                mobile: mobile,
+                personalEmail: personalEmail,
+                village: village,
                 role: 'user',
                 status: 'pending',
                 created_at: serverTimestamp()
@@ -333,6 +424,9 @@ loginForm.addEventListener('submit', async (e) => {
         }
         loginForm.reset();
         loginMsg.textContent = '';
+
+        // Reset to login mode after successful registration if desired, 
+        // but typically onAuthStateChanged handles the redirect
     } catch (error) {
         loginMsg.textContent = error.message;
         loginMsg.className = 'error';
@@ -476,44 +570,138 @@ function setupTabs(tabs) {
 }
 
 function setupPatientListener() {
-    if (patientUnsubscribe) patientUnsubscribe();
 
-    let q;
-    if (userRole === 'admin') {
-        // Admins see everything
-        q = query(collection(db, "patients"), orderBy("updated_at", "desc"));
-    } else {
-        // Check if user has any assigned villages to avoid query errors
-        if (userAssignedVillages && userAssignedVillages.length > 0) {
-            const villageNames = userAssignedVillages.map(v => v.name);
-            q = query(
-                collection(db, "patients"),
-                where("village", "in", villageNames),
-                orderBy("updated_at", "desc")
-            );
-        } else {
-            // If no villages are assigned, show nothing (or handle as needed)
-            renderPatients([]);
-            return;
+    const form = document.getElementById("patient-form");
+
+    form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+
+        const msg = document.getElementById("form-msg");
+        msg.textContent = "Saving data...";
+        msg.style.color = "blue";
+
+        try {
+
+            const data = {
+                name: document.getElementById("name").value,
+                mobile: document.getElementById("mobile").value,
+                patient_email: document.getElementById("patient_email").value,
+                dob: document.getElementById("dob").value,
+                caste: document.getElementById("caste").value,
+                gender: document.getElementById("gender").value,
+                marital_status: document.getElementById("marital_status").value,
+
+                chronic_disease: document.getElementById("chronic_disease").value,
+                vaccination_status: document.getElementById("vaccination_status").value,
+                nearest_healthcare: document.getElementById("nearest_healthcare").value,
+
+                village: document.getElementById("village")?.value || "",
+                gram_panchayat: document.getElementById("gram_panchayat").value,
+                district: document.getElementById("district").value,
+                taluk: document.getElementById("taluk").value,
+                state: document.getElementById("state").value,
+                pincode: document.getElementById("pincode").value,
+                landmark: document.getElementById("landmark").value,
+
+                is_employed: document.getElementById("is_employed").value,
+                sector: document.getElementById("sector")?.value || "",
+                owns_land: document.getElementById("owns_land")?.value || "",
+                acres: document.getElementById("acres")?.value || "",
+                sown: document.getElementById("sown")?.value || "",
+                expected_yield: document.getElementById("expected_yield")?.value || "",
+                livestocks: document.getElementById("livestocks")?.value || "",
+
+                annual_income: document.getElementById("annual_income").value,
+                tax_regime: document.getElementById("tax_regime").value,
+
+                road_access: document.getElementById("road_access").value,
+                internet: document.getElementById("internet").value,
+                transport: document.getElementById("transport").value,
+                distance_hospital: document.getElementById("distance_hospital").value,
+                distance_school: document.getElementById("distance_school").value,
+                distance_market: document.getElementById("distance_market").value,
+
+                qualification: document.getElementById("qualification").value,
+                children_school: document.getElementById("children_school").value,
+                school_type: document.getElementById("school_type")?.value || "",
+                dropouts: document.getElementById("dropouts").value
+            };
+
+            // 🔥 Generate common ID
+            const citizenRef = doc(collection(db, "citizens"));
+            const citizenId = citizenRef.id;
+
+            // 1. Citizens
+            await setDoc(doc(db, "citizens", citizenId), {
+                name: data.name,
+                mobile: data.mobile,
+                email: data.patient_email,
+                dob: data.dob,
+                gender: data.gender,
+                caste: data.caste,
+                marital_status: data.marital_status,
+                createdAt: serverTimestamp()
+            });
+
+            // 2. Health
+            await setDoc(doc(db, "health_profiles", citizenId), {
+                chronic_disease: data.chronic_disease,
+                vaccination_status: data.vaccination_status,
+                nearest_healthcare: data.nearest_healthcare
+            });
+
+            // 3. Location
+            await setDoc(doc(db, "locations", citizenId), {
+                village: data.village,
+                gram_panchayat: data.gram_panchayat,
+                district: data.district,
+                taluk: data.taluk,
+                state: data.state,
+                pincode: data.pincode,
+                landmark: data.landmark
+            });
+
+            // 4. Economic
+            await setDoc(doc(db, "economic_profiles", citizenId), {
+                is_employed: data.is_employed,
+                sector: data.sector,
+                owns_land: data.owns_land,
+                acres: data.acres,
+                crops: data.sown,
+                expected_yield: data.expected_yield,
+                livestock: data.livestocks,
+                annual_income: data.annual_income,
+                tax_regime: data.tax_regime
+            });
+
+            // 5. Infrastructure
+            await setDoc(doc(db, "infrastructure_access", citizenId), {
+                road_access: data.road_access,
+                internet: data.internet,
+                transport: data.transport,
+                distance_hospital: data.distance_hospital,
+                distance_school: data.distance_school,
+                distance_market: data.distance_market
+            });
+
+            // 6. Education
+            await setDoc(doc(db, "education_profiles", citizenId), {
+                qualification: data.qualification,
+                children_school: data.children_school,
+                school_type: data.school_type,
+                dropouts: data.dropouts
+            });
+
+            msg.textContent = "✅ Data saved successfully!";
+            msg.style.color = "green";
+
+            form.reset();
+
+        } catch (error) {
+            console.error(error);
+            msg.textContent = "❌ Error saving data";
+            msg.style.color = "red";
         }
-    }
-
-    patientUnsubscribe = onSnapshot(q, { includeMetadataChanges: true }, (snapshot) => {
-        allPatients = [];
-        snapshot.forEach((docSnap) => {
-            const data = docSnap.data();
-            const source = docSnap.metadata.hasPendingWrites ? "Local" : "Server";
-            allPatients.push({ id: docSnap.id, source, ...data });
-        });
-        renderPatients(allPatients);
-
-        if (userRole !== 'admin') {
-            updateUserDashboardStats();
-        }
-    }, (error) => {
-        console.error("Patient list error:", error);
-        // Note: You may need to create a composite index in Firebase Console 
-        // for (village ASC, updated_at DESC)
     });
 }
 
@@ -538,14 +726,16 @@ function adminSetup() {
 
             div.innerHTML = `
                 <div class="col-name">
-                    <div class="primary-text">${escapeHTML(data.email)}</div>
-                    <div class="secondary-text">User ID: ${docSnap.id}</div>
+                    <div class="primary-text">${escapeHTML(data.fullName || data.email)}</div>
+                    <div class="secondary-text">${data.fullName ? escapeHTML(data.email) : 'User ID: ' + docSnap.id}</div>
+                    ${data.village ? `<div class="village-tag">Village: ${escapeHTML(data.village)}</div>` : ''}
+                    ${data.mobile ? `<div class="mobile-tag" style="font-size:0.8rem; color:var(--text-muted);">📱 ${escapeHTML(data.mobile)}</div>` : ''}
                 </div>
                 <div class="col-info">
                     <span class="badge ${isApproved ? 'badge-success' : 'badge-warning'}">${data.status.toUpperCase()}</span>
                 </div>
                 <div class="col-location">
-                    ${isApproved ? `<div id="v-list-${docSnap.id}" style="font-size:0.85rem;">Loading...</div>` : '<span class="secondary-text">Pending</span>'}
+                    ${isApproved ? `<div id="v-list-${docSnap.id}" style="font-size:0.85rem;">Loading...</div>` : '<span class="secondary-text">Awaiting Approval</span>'}
                 </div>
                 <div class="col-actions">
                     ${data.status !== 'approved' ? `<button class="icon-btn" onclick="approveUser('${docSnap.id}')">Approve</button>` : ''}
@@ -971,7 +1161,7 @@ function setupFormVillageInput() {
 
 function renderPatients(patients) {
     patientListEl.innerHTML = '';
-    
+
     const fragment = document.createDocumentFragment();
 
     // Add header row
@@ -1008,11 +1198,11 @@ function renderPatients(patients) {
 
         div.style.cursor = 'pointer';
         div.onclick = (e) => {
-            if(!e.target.closest('button')) showReadModal(p);
+            if (!e.target.closest('button')) showReadModal(p);
         };
 
         const actionContainer = div.querySelector('.col-actions');
-        
+
         // Edit Button with Icon
         const editBtn = document.createElement('button');
         editBtn.className = 'icon-btn';
@@ -1666,9 +1856,9 @@ function animateGlow() {
         // Linear interpolation for buttery smooth following
         glowX += (mouseX - glowX) * 0.06;
         glowY += (mouseY - glowY) * 0.06;
-        
+
         // Use translate3d to offload rendering to GPU and avoid layout reflows
-        cursorGlow.style.transform = `translate3d(${glowX - (cursorGlow.offsetWidth/2)}px, ${glowY - (cursorGlow.offsetHeight/2)}px, 0)`;
+        cursorGlow.style.transform = `translate3d(${glowX - (cursorGlow.offsetWidth / 2)}px, ${glowY - (cursorGlow.offsetHeight / 2)}px, 0)`;
     }
     requestAnimationFrame(animateGlow);
 }
