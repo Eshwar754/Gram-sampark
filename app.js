@@ -25,6 +25,16 @@ import {
     deleteDoc
 } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
 
+const escapeHTML = (str) => {
+    if (str === null || str === undefined) return "";
+    return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+};
+
 // TODO: Replace with your actual Firebase project config
 const firebaseConfig = {
     apiKey: "AIzaSyD_wuR44KHN1fa_jXpHunL-BhmMGvBDTBM",
@@ -35,9 +45,11 @@ const firebaseConfig = {
     appId: "1:10325008019:web:26f635ed4b84f7beb57766"
 };
 
+console.log("Firebase initializing...");
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
+console.log("Firebase initialized.");
 
 // Explicitly set persistence for offline auth survival
 setPersistence(auth, browserLocalPersistence)
@@ -73,6 +85,7 @@ const loginForm = document.getElementById('login-form');
 const logoutBtn = document.getElementById('logout-btn');
 const userInfo = document.getElementById('user-info');
 const loginMsg = document.getElementById('login-msg');
+console.log("Login form elements:", { loginForm: !!loginForm, toggleAuth: !!document.getElementById('toggle-auth') });
 
 // Admin UI Elements
 const panelAdminDashboard = document.getElementById('panel-admin-dashboard');
@@ -116,12 +129,17 @@ const nextBtn = document.getElementById('next-btn');
 const prevBtn = document.getElementById('prev-btn');
 const submitBtn = document.getElementById('submit-btn');
 
-nextBtn.addEventListener('click', () => {
-    if (validateStep(currentStep)) {
-        changeStep(1);
-    }
-});
-prevBtn.addEventListener('click', () => changeStep(-1));
+if (nextBtn) {
+    nextBtn.addEventListener('click', () => {
+        if (validateStep(currentStep)) {
+            changeStep(1);
+        }
+    });
+}
+
+if (prevBtn) {
+    prevBtn.addEventListener('click', () => changeStep(-1));
+}
 
 function changeStep(direction) {
     document.getElementById(`step-${currentStep}`).style.display = 'none';
@@ -199,27 +217,41 @@ const farmerDetailsContainer = document.getElementById('farmer-details-container
 const landDetailsContainer = document.getElementById('land-details-container');
 const schoolTypeContainer = document.getElementById('school-type-container');
 
-isEmployedSelect.addEventListener('change', (e) => {
-    const employed = e.target.value === 'Yes';
-    empSectorContainer.style.display = employed ? 'block' : 'none';
-    if (!employed) {
-        farmerDetailsContainer.style.display = 'none';
-    } else {
-        farmerDetailsContainer.style.display = sectorSelect.value === 'Farmer' ? 'block' : 'none';
-    }
-});
+if (isEmployedSelect) {
+    isEmployedSelect.addEventListener('change', (e) => {
+        const employed = e.target.value === 'Yes';
+        empSectorContainer.style.display = employed ? 'block' : 'none';
+        if (!employed) {
+            farmerDetailsContainer.style.display = 'none';
+        } else {
+            farmerDetailsContainer.style.display = sectorSelect.value === 'Farmer' ? 'block' : 'none';
+        }
+    });
+}
 
-sectorSelect.addEventListener('change', (e) => {
-    farmerDetailsContainer.style.display = e.target.value === 'Farmer' ? 'block' : 'none';
-});
+if (sectorSelect) {
+    sectorSelect.addEventListener('change', (e) => {
+        if (farmerDetailsContainer) {
+            farmerDetailsContainer.style.display = e.target.value === 'Farmer' ? 'block' : 'none';
+        }
+    });
+}
 
-ownsLandSelect.addEventListener('change', (e) => {
-    landDetailsContainer.style.display = e.target.value === 'Yes' ? 'block' : 'none';
-});
+if (ownsLandSelect) {
+    ownsLandSelect.addEventListener('change', (e) => {
+        if (landDetailsContainer) {
+            landDetailsContainer.style.display = e.target.value === 'Yes' ? 'block' : 'none';
+        }
+    });
+}
 
-childrenSchoolSelect.addEventListener('change', (e) => {
-    schoolTypeContainer.style.display = e.target.value === 'Yes' ? 'block' : 'none';
-});
+if (childrenSchoolSelect) {
+    childrenSchoolSelect.addEventListener('change', (e) => {
+        if (schoolTypeContainer) {
+            schoolTypeContainer.style.display = e.target.value === 'Yes' ? 'block' : 'none';
+        }
+    });
+}
 
 // Family Members Logic
 const addFamilyBtn = document.getElementById('add-family-btn');
@@ -304,52 +336,92 @@ let isLoginMode = true;
 const authTitle = document.getElementById('auth-title');
 const authBtn = document.getElementById('auth-btn');
 const toggleAuth = document.getElementById('toggle-auth');
+const signupExtraFields = document.getElementById('signup-extra-fields');
 
-toggleAuth.addEventListener('click', (e) => {
-    e.preventDefault();
-    isLoginMode = !isLoginMode;
-    authTitle.textContent = isLoginMode ? 'Login' : 'Register';
-    authBtn.textContent = isLoginMode ? 'Login' : 'Sign Up';
-    toggleAuth.textContent = isLoginMode ? 'Need an account? Register here' : 'Already have an account? Login here';
-});
-
-loginForm.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const email = document.getElementById('email').value.trim();
-    const password = document.getElementById('password').value;
-    try {
-        if (isLoginMode) {
-            await signInWithEmailAndPassword(auth, email, password);
-        } else {
-            // Registration
-            const userCred = await createUserWithEmailAndPassword(auth, email, password);
-            // Auto create unapproved user doc
-            await setDoc(doc(db, 'users', userCred.user.uid), {
-                email: email,
-                role: 'user',
-                status: 'pending',
-                created_at: serverTimestamp()
+if (toggleAuth) {
+    toggleAuth.addEventListener('click', (e) => {
+        e.preventDefault();
+        isLoginMode = !isLoginMode;
+        if (authTitle) authTitle.textContent = isLoginMode ? 'Sign in to your account' : 'Create your account';
+        if (authBtn) authBtn.textContent = isLoginMode ? 'Continue' : 'Create Account';
+        toggleAuth.textContent = isLoginMode ? 'Create a new account' : 'Already have an account? Sign in';
+        
+        if (signupExtraFields) {
+            signupExtraFields.style.display = isLoginMode ? 'none' : 'block';
+            // Update required attributes for signup fields
+            const inputs = signupExtraFields.querySelectorAll('input');
+            inputs.forEach(input => {
+                if (!isLoginMode) {
+                    input.setAttribute('required', '');
+                } else {
+                    input.removeAttribute('required');
+                }
             });
         }
-        loginForm.reset();
-        loginMsg.textContent = '';
-    } catch (error) {
-        loginMsg.textContent = error.message;
-        loginMsg.className = 'error';
-    }
-});
+    });
+    console.log("Toggle Auth listener attached.");
+}
 
-logoutBtn.addEventListener('click', () => {
-    signOut(auth);
-});
+if (loginForm) {
+    loginForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const email = document.getElementById('email').value.trim();
+        const password = document.getElementById('password').value;
+
+        try {
+            if (isLoginMode) {
+                await signInWithEmailAndPassword(auth, email, password);
+            } else {
+                // Registration mode - collect extra fields
+                const fullname = document.getElementById('fullname').value.trim();
+                const mobile = document.getElementById('mobile_number').value.trim();
+                const personalEmail = document.getElementById('personal_email').value.trim();
+
+                if (!fullname || !mobile || !personalEmail) {
+                    throw new Error("Please fill in all registration fields.");
+                }
+
+                // Registration
+                const userCred = await createUserWithEmailAndPassword(auth, email, password);
+                
+                // Auto create unapproved user doc with extra details
+                await setDoc(doc(db, 'users', userCred.user.uid), {
+                    email: email,
+                    name: fullname,
+                    mobile: mobile,
+                    personal_email: personalEmail,
+                    role: 'user',
+                    status: 'pending',
+                    created_at: serverTimestamp(),
+                    updated_at: serverTimestamp()
+                });
+            }
+            loginForm.reset();
+            if (loginMsg) loginMsg.textContent = '';
+        } catch (error) {
+            if (loginMsg) {
+                loginMsg.textContent = error.message;
+                loginMsg.className = 'error';
+            }
+            console.error("Auth error:", error);
+        }
+    });
+    console.log("Login Form listener attached.");
+}
+
+if (logoutBtn) {
+    logoutBtn.addEventListener('click', () => {
+        signOut(auth);
+    });
+}
 
 onAuthStateChanged(auth, async (user) => {
     if (user) {
         currentUser = user;
-        userInfo.textContent = user.email;
-        logoutBtn.style.display = 'inline-block';
-        loginSection.style.display = 'none';
-        appContainer.style.display = 'grid';
+        if (userInfo) userInfo.textContent = user.email;
+        if (logoutBtn) logoutBtn.style.display = 'inline-block';
+        if (loginSection) loginSection.style.display = 'none';
+        if (appContainer) appContainer.style.display = 'grid';
 
         // Check Role & Status
         const userDocRef = doc(db, 'users', user.uid);
@@ -365,23 +437,31 @@ onAuthStateChanged(auth, async (user) => {
             await setDoc(userDocRef, { email: user.email, role: 'user', status: 'pending' });
         }
 
+        document.body.className = userRole === 'admin' ? 'role-admin' : '';
+
         if (userRole === 'admin') {
-            appContainer.style.display = 'block';
-            pendingSection.style.display = 'none';
+            if (appContainer) appContainer.style.display = 'block';
+            if (pendingSection) pendingSection.style.display = 'none';
             setupTabs([
                 { id: 'panel-admin-dashboard', title: 'Admin Dashboard' },
                 { id: 'panel-admin-manage', title: 'Manage System' },
+                { id: 'panel-schemes', title: 'Government Schemes' },
+                { id: 'panel-beneficiaries', title: 'Global Beneficiaries' },
                 { id: 'panel-add-data', title: 'Add Record (Override)' },
                 { id: 'panel-view-data', title: 'Global Database' }
             ]);
             adminSetup();
             await fetchAssignedVillages(user);
             setupPatientListener();
-        } else if (userStatus === 'approved') {
-            appContainer.style.display = 'block';
-            pendingSection.style.display = 'none';
+            setupSchemesListener();
+            setupBeneficiariesListener();
+        } else if (userStatus === 'approved' || userRole === 'surveyor') {
+            if (appContainer) appContainer.style.display = 'block';
+            if (pendingSection) pendingSection.style.display = 'none';
             setupTabs([
                 { id: 'panel-user-dashboard', title: 'My Dashboard' },
+                { id: 'panel-schemes', title: 'Schemes' },
+                { id: 'panel-beneficiaries', title: 'Beneficiaries' },
                 { id: 'panel-add-data', title: 'Add Data' },
                 { id: 'panel-view-data', title: 'View Records' },
                 { id: 'panel-user-request', title: 'Request Village Access' }
@@ -389,10 +469,12 @@ onAuthStateChanged(auth, async (user) => {
             userSetup();
             await fetchAssignedVillages(user);
             setupPatientListener();
+            setupSchemesListener();
+            setupBeneficiariesListener();
         } else {
             // Pending or Rejected user
-            appContainer.style.display = 'none';
-            pendingSection.style.display = 'block';
+            if (appContainer) appContainer.style.display = 'none';
+            if (pendingSection) pendingSection.style.display = 'block';
 
             const reactCont = document.getElementById('reactivation-container');
             const reactBtn = document.getElementById('request-reactivation-btn');
@@ -401,24 +483,30 @@ onAuthStateChanged(auth, async (user) => {
             const pendingText = document.getElementById('pending-msg');
 
             if (userStatus === 'rejected' || userStatus === 'revoked') {
-                pendingTitle.textContent = 'Account Access Revoked';
-                pendingText.textContent = 'Your access has been revoked by an administrator.';
-                reactCont.style.display = 'block';
-                reactBtn.onclick = async () => {
-                    try {
-                        await setDoc(doc(db, 'users', user.uid), { status: 'pending' }, { merge: true });
-                        pendingStatus.textContent = 'Re-activation request sent!';
-                        pendingStatus.className = 'success';
-                        reactCont.style.display = 'none';
-                    } catch (e) {
-                        pendingStatus.textContent = e.message;
-                        pendingStatus.className = 'error';
-                    }
-                };
+                if (pendingTitle) pendingTitle.textContent = 'Account Access Revoked';
+                if (pendingText) pendingText.textContent = 'Your access has been revoked by an administrator.';
+                if (reactCont) reactCont.style.display = 'block';
+                if (reactBtn) {
+                    reactBtn.onclick = async () => {
+                        try {
+                            await setDoc(doc(db, 'users', user.uid), { status: 'pending' }, { merge: true });
+                            if (pendingStatus) {
+                                pendingStatus.textContent = 'Re-activation request sent!';
+                                pendingStatus.className = 'success';
+                            }
+                            if (reactCont) reactCont.style.display = 'none';
+                        } catch (e) {
+                            if (pendingStatus) {
+                                pendingStatus.textContent = e.message;
+                                pendingStatus.className = 'error';
+                            }
+                        }
+                    };
+                }
             } else {
-                pendingTitle.textContent = 'Account Pending Approval';
-                pendingText.textContent = 'Your account has been created successfully but is awaiting admin approval.';
-                reactCont.style.display = 'none';
+                if (pendingTitle) pendingTitle.textContent = 'Account Pending Approval';
+                if (pendingText) pendingText.textContent = 'Your account has been created successfully but is awaiting admin approval.';
+                if (reactCont) reactCont.style.display = 'none';
             }
         }
 
@@ -428,11 +516,11 @@ onAuthStateChanged(auth, async (user) => {
         userStatus = 'pending';
         userAssignedVillages = [];
         activeVillage = null;
-        userInfo.textContent = '';
-        logoutBtn.style.display = 'none';
-        loginSection.style.display = 'flex';
-        appContainer.style.display = 'none';
-        pendingSection.style.display = 'none';
+        if (userInfo) userInfo.textContent = '';
+        if (logoutBtn) logoutBtn.style.display = 'none';
+        if (loginSection) loginSection.style.display = 'flex';
+        if (appContainer) appContainer.style.display = 'none';
+        if (pendingSection) pendingSection.style.display = 'none';
 
         if (patientUnsubscribe) patientUnsubscribe();
         if (villageUnsubscribe) villageUnsubscribe();
@@ -485,10 +573,11 @@ function setupPatientListener() {
     } else {
         // Check if user has any assigned villages to avoid query errors
         if (userAssignedVillages && userAssignedVillages.length > 0) {
-            const villageNames = userAssignedVillages.map(v => v.name);
+            const villageIds = userAssignedVillages.map(v => v.id);
+            // Firestore rules use village_id for surveyors
             q = query(
                 collection(db, "patients"),
-                where("village", "in", villageNames),
+                where("village_id", "in", villageIds),
                 orderBy("updated_at", "desc")
             );
         } else {
@@ -543,6 +632,11 @@ function adminSetup() {
                 </div>
                 <div class="col-info">
                     <span class="badge ${isApproved ? 'badge-success' : 'badge-warning'}">${data.status.toUpperCase()}</span>
+                    <select onchange="updateUserRole('${docSnap.id}', this.value)" style="margin-left:10px; font-size:0.8rem;">
+                        <option value="user" ${data.role === 'user' ? 'selected' : ''}>User</option>
+                        <option value="surveyor" ${data.role === 'surveyor' ? 'selected' : ''}>Surveyor</option>
+                        <option value="admin" ${data.role === 'admin' ? 'selected' : ''}>Admin</option>
+                    </select>
                 </div>
                 <div class="col-location">
                     ${isApproved ? `<div id="v-list-${docSnap.id}" style="font-size:0.85rem;">Loading...</div>` : '<span class="secondary-text">Pending</span>'}
@@ -620,7 +714,7 @@ function adminSetup() {
                 </div>
                 <div class="col-location"></div>
                 <div class="col-actions">
-                    <button class="icon-btn" onclick="approveAccess('${docSnap.id}', '${data.user_email}', '${data.village}')">Grant</button>
+                    <button class="icon-btn" onclick="approveAccess('${docSnap.id}', '${data.user_uid}', '${data.user_email}', '${data.village}')">Grant</button>
                     <button class="icon-btn delete" onclick="rejectAccess('${docSnap.id}')">Deny</button>
                 </div>
             `;
@@ -694,6 +788,7 @@ function userSetup() {
             }
 
             await addDoc(collection(db, 'access_requests'), {
+                user_uid: currentUser.uid,
                 user_email: currentUser.email,
                 village: v,
                 status: 'pending',
@@ -753,32 +848,47 @@ function showAdminMsg(msg, type) {
 // Helper to fetch and render user-specific village tags with granular revoke
 async function fetchUserVillages(email, containerId) {
     const container = document.getElementById(containerId);
+    // Find user UID by email first if we only have email
+    const uq = query(collection(db, 'users'), where('email', '==', email));
+    const uSnap = await getDocs(uq);
+    let uid = '';
+    uSnap.forEach(d => uid = d.id);
+
     const vq = query(collection(db, 'villages'));
     const vSnap = await getDocs(vq);
     let html = '';
     vSnap.forEach(vDoc => {
         const vData = vDoc.data();
-        if (vData.assigned_users && vData.assigned_users.includes(email)) {
+        if (vData.assigned_users && (vData.assigned_users.includes(email) || vData.assigned_users.includes(uid))) {
             html += `<span class="source-tag" style="background:#e3f2fd; color:#1565c0; display:flex; align-items:center; gap:5px;">
                 ${escapeHTML(vData.name)}
-                <span onclick="revokeVillageFromUser('${escapeHTML(vData.name)}', '${escapeHTML(email)}')" style="cursor:pointer; font-weight:bold; color:#d32f2f;">&times;</span>
+                <span onclick="revokeVillageFromUser('${escapeHTML(vData.name)}', '${escapeHTML(email)}', '${uid}')" style="cursor:pointer; font-weight:bold; color:#d32f2f;">&times;</span>
             </span>`;
         }
     });
     container.innerHTML = html || 'No specific villages assigned.';
 }
 
-window.revokeVillageFromUser = async function (villageName, userEmail) {
-    if (!confirm(`Revoke access to ${villageName} for ${userEmail}?`)) return;
+window.revokeVillageFromUser = async function (villageName, userEmail, userUid) {
+    if (!confirm(`Revoke access to ${villageName}?`)) return;
     try {
         const vq = query(collection(db, 'villages'), where('name', '==', villageName));
         const snapshot = await getDocs(vq);
         snapshot.forEach(async (docSnap) => {
             const currentUsers = docSnap.data().assigned_users || [];
-            const newUsers = currentUsers.filter(e => e !== userEmail);
+            const newUsers = currentUsers.filter(e => e !== userEmail && e !== userUid);
             await setDoc(doc(db, 'villages', docSnap.id), { assigned_users: newUsers }, { merge: true });
         });
-        showAdminMsg(`Access to ${villageName} revoked for ${userEmail}`, 'success');
+        showAdminMsg(`Access to ${villageName} revoked`, 'success');
+    } catch (e) {
+        showAdminMsg(e.message, 'error');
+    }
+};
+
+window.updateUserRole = async function (uid, newRole) {
+    try {
+        await setDoc(doc(db, 'users', uid), { role: newRole }, { merge: true });
+        showAdminMsg('User role updated!', 'success');
     } catch (e) {
         showAdminMsg(e.message, 'error');
     }
@@ -824,7 +934,7 @@ window.revokeUser = async function (uid, email) {
     }
 };
 
-window.approveAccess = async function (reqId, userEmail, villageName) {
+window.approveAccess = async function (reqId, userUid, userEmail, villageName) {
     try {
         // 1. Mark request as approved
         await setDoc(doc(db, 'access_requests', reqId), {
@@ -832,15 +942,19 @@ window.approveAccess = async function (reqId, userEmail, villageName) {
             approved_at: serverTimestamp()
         }, { merge: true });
 
-        // 2. Find village doc and append user
+        // 2. Find village doc and append user UID (preferred by rules)
         const vq = query(collection(db, 'villages'), where('name', '==', villageName));
         const snapshot = await getDocs(vq);
         for (const docSnap of snapshot.docs) {
             const currentUsers = docSnap.data().assigned_users || [];
-            if (!currentUsers.includes(userEmail)) {
-                currentUsers.push(userEmail);
-                await setDoc(doc(db, 'villages', docSnap.id), { assigned_users: currentUsers }, { merge: true });
+            // We store both email and UID for compatibility, but rules prefer UID
+            if (userUid && !currentUsers.includes(userUid)) {
+                currentUsers.push(userUid);
             }
+            if (userEmail && !currentUsers.includes(userEmail)) {
+                currentUsers.push(userEmail);
+            }
+            await setDoc(doc(db, 'villages', docSnap.id), { assigned_users: currentUsers }, { merge: true });
         }
         showAdminMsg('Request approved and village assigned', 'success');
     } catch (e) {
@@ -859,7 +973,7 @@ window.rejectAccess = async function (reqId) {
 
 async function fetchAssignedVillages(user) {
     userAssignedVillages = [];
-    const q = query(collection(db, 'villages'), where('assigned_users', 'array-contains', user.email));
+    const q = query(collection(db, 'villages'), where('assigned_users', 'array-contains-any', [user.email, user.uid]));
 
     // Proper realtime listener for assigned villages to restrict UI dynamically
     onSnapshot(q, (snapshot) => {
@@ -919,7 +1033,7 @@ function updateUserDashboardStats() {
 
 function setupFormVillageInput() {
     const container = document.getElementById('village-input-container');
-    container.innerHTML = '';
+    if (container) container.innerHTML = '';
 
     const filterSelect = document.getElementById('filter-village-select');
     if (filterSelect) {
@@ -970,8 +1084,9 @@ function setupFormVillageInput() {
 }
 
 function renderPatients(patients) {
+    if (!patientListEl) return;
     patientListEl.innerHTML = '';
-    
+
     const fragment = document.createDocumentFragment();
 
     // Add header row
@@ -1008,11 +1123,11 @@ function renderPatients(patients) {
 
         div.style.cursor = 'pointer';
         div.onclick = (e) => {
-            if(!e.target.closest('button')) showReadModal(p);
+            if (!e.target.closest('button')) showReadModal(p);
         };
 
         const actionContainer = div.querySelector('.col-actions');
-        
+
         // Edit Button with Icon
         const editBtn = document.createElement('button');
         editBtn.className = 'icon-btn';
@@ -1042,25 +1157,27 @@ function renderPatients(patients) {
         pdfBtn.onclick = (e) => { e.stopPropagation(); if (window.generatePDF) window.generatePDF(p); };
         actionContainer.appendChild(pdfBtn);
 
-        // Delete Button with Icon
-        const delBtn = document.createElement('button');
-        delBtn.className = 'icon-btn delete';
-        delBtn.title = 'Delete Record';
-        delBtn.innerHTML = `
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <polyline points="3 6 5 6 21 6"></polyline>
-                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                <line x1="10" y1="11" x2="10" y2="17"></line>
-                <line x1="14" y1="11" x2="14" y2="17"></line>
-            </svg>
-        `;
-        delBtn.onclick = (e) => {
-            e.stopPropagation();
-            if (confirm(`Delete ${p.name}?`)) {
-                deleteDoc(doc(db, "patients", p.id)).then(() => applyPatientFilters());
-            }
-        };
-        actionContainer.appendChild(delBtn);
+        // Delete Button with Icon - Only for Admins as per rules
+        if (userRole === 'admin') {
+            const delBtn = document.createElement('button');
+            delBtn.className = 'icon-btn delete';
+            delBtn.title = 'Delete Record';
+            delBtn.innerHTML = `
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="3 6 5 6 21 6"></polyline>
+                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                    <line x1="10" y1="11" x2="10" y2="17"></line>
+                    <line x1="14" y1="11" x2="14" y2="17"></line>
+                </svg>
+            `;
+            delBtn.onclick = (e) => {
+                e.stopPropagation();
+                if (confirm(`Delete ${p.name}?`)) {
+                    deleteDoc(doc(db, "patients", p.id)).then(() => applyPatientFilters());
+                }
+            };
+            actionContainer.appendChild(delBtn);
+        }
 
         fragment.appendChild(div);
     });
@@ -1068,18 +1185,6 @@ function renderPatients(patients) {
     patientListEl.appendChild(fragment);
 }
 
-function escapeHTML(str) {
-    if (str === null || str === undefined) return '';
-    return String(str).replace(/[&<>'"]/g,
-        tag => ({
-            '&': '&amp;',
-            '<': '&lt;',
-            '>': '&gt;',
-            "'": '&#39;',
-            '"': '&quot;'
-        }[tag] || tag)
-    );
-}
 
 function deepSanitize(obj) {
     if (Array.isArray(obj)) {
@@ -1098,578 +1203,818 @@ function deepSanitize(obj) {
 }
 
 // Handle Form Submission
-form.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    if (!validateStep(currentStep)) return;
+if (form) {
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        if (!validateStep(currentStep)) return;
 
-    // Last-second fallback for village synchronization
-    const villageVal = document.getElementById('village').value.trim();
-    if (villageVal && !activeVillage) {
-        if (userRole === 'admin') {
-            activeVillage = allVillagesCache.find(v => v.name === villageVal) || null;
-        } else {
-            activeVillage = userAssignedVillages.find(v => v.name === villageVal) || null;
-        }
-    }
-
-    const docId = document.getElementById('docId').value;
-    const patientData = {
-        name: document.getElementById('name').value.trim(),
-        mobile: document.getElementById('mobile').value.trim(),
-        email: document.getElementById('patient_email').value.trim(),
-        dob: document.getElementById('dob').value,
-        caste: document.getElementById('caste').value.trim(),
-        gender: document.getElementById('gender').value,
-        marital_status: document.getElementById('marital_status').value,
-
-        family_members: getFamilyData(),
-
-        chronic_disease: document.getElementById('chronic_disease').value.trim(),
-        vaccination_status: document.getElementById('vaccination_status').value.trim(),
-        nearest_healthcare: document.getElementById('nearest_healthcare').value.trim(),
-
-        village: activeVillage ? activeVillage.name : document.getElementById('village').value.trim(),
-        village_id: activeVillage ? String(activeVillage.id) : (allVillagesCache.find(v => v.name === document.getElementById('village').value.trim())?.id || ''),
-        gram_panchayat: document.getElementById('gram_panchayat').value.trim(),
-        taluk: document.getElementById('taluk').value.trim(),
-        district: document.getElementById('district').value.trim(),
-        state: document.getElementById('state').value.trim(),
-        landmark: document.getElementById('landmark').value.trim(),
-        pincode: document.getElementById('pincode').value.trim(),
-
-        is_employed: document.getElementById('is_employed').value,
-        sector: document.getElementById('sector').value,
-        owns_land: document.getElementById('owns_land').value,
-        acres: document.getElementById('acres').value,
-        sown: document.getElementById('sown').value.trim(),
-        expected_yield: document.getElementById('expected_yield').value.trim(),
-        livestocks: document.getElementById('livestocks').value.trim(),
-
-        annual_income: document.getElementById('annual_income').value.trim(),
-        tax_regime: document.getElementById('tax_regime').value,
-
-        road_access: document.getElementById('road_access').value,
-        internet: document.getElementById('internet').value,
-        public_transport: document.getElementById('transport').value,
-        distance_hospital: document.getElementById('distance_hospital').value || '',
-        distance_school: document.getElementById('distance_school').value || '',
-        distance_market: document.getElementById('distance_market').value || '',
-
-        highest_qual: document.getElementById('qualification').value.trim(),
-        children_school: document.getElementById('children_school').value,
-        school_type: document.getElementById('school_type').value,
-        school_dropouts: document.getElementById('dropouts').value,
-
-        assigned_by_email: currentUser.email, // Assign to current user
-        village_id: activeVillage ? String(activeVillage.id) : (allVillagesCache.find(v => v.name === document.getElementById('village').value.trim())?.id || ''),
-        updated_at: serverTimestamp(),
-        // Keep a client-side timestamp to perform our manual Last Write Wins check
-        client_timestamp: Date.now()
-    };
-
-    const sanitizedData = deepSanitize(patientData);
-
-    try {
-        if (docId) {
-            const patientRef = doc(db, "patients", docId);
-            const existingDoc = await getDoc(patientRef);
-            if (existingDoc.exists()) {
-                const existingData = existingDoc.data();
-                if (existingData.client_timestamp && existingData.client_timestamp > patientData.client_timestamp) {
-                    showMsg('Cannot update: Server has a newer version of this record.', 'error');
-                    return;
-                }
+        // Last-second fallback for village synchronization
+        const villageVal = document.getElementById('village').value.trim();
+        if (villageVal && !activeVillage) {
+            if (userRole === 'admin') {
+                activeVillage = allVillagesCache.find(v => v.name === villageVal) || null;
+            } else {
+                activeVillage = userAssignedVillages.find(v => v.name === villageVal) || null;
             }
-            // Fire and forget the save so UI updates immediately even if offline
-            setDoc(patientRef, sanitizedData, { merge: true })
-                .catch(e => console.error("Background sync error:", e));
-            showMsg('Patient record updated successfully! (Syncing in background)', 'success');
-        } else {
-            // Fire and forget the save so UI updates immediately even if offline
-            addDoc(collection(db, "patients"), sanitizedData)
-                .catch(e => console.error("Background sync error:", e));
-            showMsg('New patient added successfully! (Syncing in background)', 'success');
         }
 
-        clearForm();
+        const docId = document.getElementById('docId').value;
+        const patientData = {
+            name: document.getElementById('name').value.trim(),
+            mobile: document.getElementById('mobile').value.trim(),
+            email: document.getElementById('patient_email').value.trim(),
+            dob: document.getElementById('dob').value,
+            caste: document.getElementById('caste').value.trim(),
+            gender: document.getElementById('gender').value,
+            marital_status: document.getElementById('marital_status').value,
 
-        if (document.getElementById('general-modal').style.display === 'flex') {
-            closeModal();
-        } else {
-            // Reset steps back to 1
-            currentStep = 1;
-            document.querySelectorAll('.step.completed').forEach(el => el.classList.remove('completed'));
-            changeStep(0); // Applies initial logic
+            family_members: getFamilyData(),
+
+            chronic_disease: document.getElementById('chronic_disease').value.trim(),
+            vaccination_status: document.getElementById('vaccination_status').value.trim(),
+            nearest_healthcare: document.getElementById('nearest_healthcare').value.trim(),
+
+            village: activeVillage ? activeVillage.name : document.getElementById('village').value.trim(),
+            village_id: activeVillage ? String(activeVillage.id) : (allVillagesCache.find(v => v.name === document.getElementById('village').value.trim())?.id || ''),
+            gram_panchayat: document.getElementById('gram_panchayat').value.trim(),
+            taluk: document.getElementById('taluk').value.trim(),
+            district: document.getElementById('district').value.trim(),
+            state: document.getElementById('state').value.trim(),
+            landmark: document.getElementById('landmark').value.trim(),
+            pincode: document.getElementById('pincode').value.trim(),
+
+            is_employed: document.getElementById('is_employed').value,
+            sector: document.getElementById('sector').value,
+            owns_land: document.getElementById('owns_land').value,
+            acres: document.getElementById('acres').value,
+            sown: document.getElementById('sown').value.trim(),
+            expected_yield: document.getElementById('expected_yield').value.trim(),
+            livestocks: document.getElementById('livestocks').value.trim(),
+
+            annual_income: document.getElementById('annual_income').value.trim(),
+            tax_regime: document.getElementById('tax_regime').value,
+
+            road_access: document.getElementById('road_access').value,
+            internet: document.getElementById('internet').value,
+            public_transport: document.getElementById('transport').value,
+            distance_hospital: document.getElementById('distance_hospital').value || '',
+            distance_school: document.getElementById('distance_school').value || '',
+            distance_market: document.getElementById('distance_market').value || '',
+
+            highest_qual: document.getElementById('qualification').value.trim(),
+            children_school: document.getElementById('children_school').value,
+            school_type: document.getElementById('school_type').value,
+            school_dropouts: document.getElementById('dropouts').value,
+
+            assigned_by_email: currentUser.email, // Assign to current user
+            village_id: activeVillage ? String(activeVillage.id) : (allVillagesCache.find(v => v.name === document.getElementById('village').value.trim())?.id || ''),
+            updated_at: serverTimestamp(),
+            // Keep a client-side timestamp to perform our manual Last Write Wins check
+            client_timestamp: Date.now()
+        };
+
+        const sanitizedData = deepSanitize(patientData);
+
+        try {
+            if (docId) {
+                const patientRef = doc(db, "patients", docId);
+                const existingDoc = await getDoc(patientRef);
+                if (existingDoc.exists()) {
+                    const existingData = existingDoc.data();
+                    if (existingData.client_timestamp && existingData.client_timestamp > patientData.client_timestamp) {
+                        showMsg('Cannot update: Server has a newer version of this record.', 'error');
+                        return;
+                    }
+                }
+                // Fire and forget the save so UI updates immediately even if offline
+                setDoc(patientRef, sanitizedData, { merge: true })
+                    .catch(e => console.error("Background sync error:", e));
+                showMsg('Patient record updated successfully! (Syncing in background)', 'success');
+            } else {
+                // Fire and forget the save so UI updates immediately even if offline
+                addDoc(collection(db, "patients"), sanitizedData)
+                    .catch(e => console.error("Background sync error:", e));
+                showMsg('New patient added successfully! (Syncing in background)', 'success');
+            }
+
+            clearForm();
+
+            if (document.getElementById('general-modal').style.display === 'flex') {
+                closeModal();
+            } else {
+                // Reset steps back to 1
+                currentStep = 1;
+                document.querySelectorAll('.step.completed').forEach(el => el.classList.remove('completed'));
+                changeStep(0); // Applies initial logic
+            }
+        } catch (error) {
+            console.error("Error writing document: ", error);
+            showMsg('Error preparing record. Check console for details.', 'error');
         }
-
-    } catch (error) {
-        console.error("Error writing document: ", error);
-        showMsg('Error preparing record. Check console for details.', 'error');
-    }
-});
+    });
+}
 
 function editPatient(p) {
-    // Reset steps to 1 before populating
-    currentStep = 1;
-    document.querySelectorAll('.step.completed').forEach(el => el.classList.remove('completed'));
-    document.querySelectorAll('.step-indicator .step').forEach(el => el.classList.remove('active'));
-    document.getElementById('step1-indicator').classList.add('active');
-    document.querySelectorAll('.form-step').forEach(el => el.style.display = 'none');
-    document.getElementById('step-1').style.display = 'block';
-    prevBtn.style.display = 'none';
-    nextBtn.style.display = 'inline-block';
-    submitBtn.style.display = 'none';
+        // Reset steps to 1 before populating
+        currentStep = 1;
+        document.querySelectorAll('.step.completed').forEach(el => el.classList.remove('completed'));
+        document.querySelectorAll('.step-indicator .step').forEach(el => el.classList.remove('active'));
+        document.getElementById('step1-indicator').classList.add('active');
+        document.querySelectorAll('.form-step').forEach(el => el.style.display = 'none');
+        document.getElementById('step-1').style.display = 'block';
+        prevBtn.style.display = 'none';
+        nextBtn.style.display = 'inline-block';
+        submitBtn.style.display = 'none';
 
-    document.getElementById('docId').value = p.id;
-    document.getElementById('name').value = p.name || '';
-    document.getElementById('mobile').value = p.mobile || '';
-    document.getElementById('patient_email').value = p.email || '';
-    document.getElementById('dob').value = p.dob || '';
-    document.getElementById('caste').value = p.caste || '';
-    document.getElementById('gender').value = p.gender || '';
-    document.getElementById('marital_status').value = p.marital_status || '';
+        document.getElementById('docId').value = p.id;
+        document.getElementById('name').value = p.name || '';
+        document.getElementById('mobile').value = p.mobile || '';
+        document.getElementById('patient_email').value = p.email || '';
+        document.getElementById('dob').value = p.dob || '';
+        document.getElementById('caste').value = p.caste || '';
+        document.getElementById('gender').value = p.gender || '';
+        document.getElementById('marital_status').value = p.marital_status || '';
 
-    // Family Details
-    familyContainer.innerHTML = '';
-    memberCount = 0;
-    if (p.family_members) {
-        p.family_members.forEach(m => addFamilyMember(m));
+        // Family Details
+        familyContainer.innerHTML = '';
+        memberCount = 0;
+        if (p.family_members) {
+            p.family_members.forEach(m => addFamilyMember(m));
+        }
+
+        document.getElementById('chronic_disease').value = p.chronic_disease || '';
+        document.getElementById('vaccination_status').value = p.vaccination_status || '';
+        document.getElementById('nearest_healthcare').value = p.nearest_healthcare || '';
+
+        document.getElementById('village').value = p.village || '';
+        document.getElementById('gram_panchayat').value = p.gram_panchayat || '';
+        document.getElementById('taluk').value = p.taluk || '';
+        document.getElementById('district').value = p.district || '';
+        document.getElementById('state').value = p.state || '';
+        document.getElementById('landmark').value = p.landmark || '';
+        document.getElementById('pincode').value = p.pincode || '';
+
+        document.getElementById('is_employed').value = p.is_employed || '';
+        document.getElementById('is_employed').dispatchEvent(new Event('change'));
+
+        document.getElementById('sector').value = p.sector || '';
+        document.getElementById('sector').dispatchEvent(new Event('change'));
+
+        document.getElementById('owns_land').value = p.owns_land || 'No';
+        document.getElementById('owns_land').dispatchEvent(new Event('change'));
+
+        document.getElementById('acres').value = p.acres || '';
+        document.getElementById('sown').value = p.sown || '';
+        document.getElementById('expected_yield').value = p.expected_yield || '';
+        document.getElementById('livestocks').value = p.livestocks || '';
+
+        // New taxation demographic fields
+        if (document.getElementById('annual_income')) document.getElementById('annual_income').value = p.annual_income || '';
+        if (document.getElementById('tax_regime')) document.getElementById('tax_regime').value = p.tax_regime || '';
+
+        document.getElementById('road_access').value = p.road_access || '';
+        document.getElementById('internet').value = p.internet || '';
+        document.getElementById('transport').value = p.public_transport || '';
+        if (document.getElementById('distance_hospital')) document.getElementById('distance_hospital').value = p.distance_hospital || '';
+        if (document.getElementById('distance_school')) document.getElementById('distance_school').value = p.distance_school || '';
+        if (document.getElementById('distance_market')) document.getElementById('distance_market').value = p.distance_market || '';
+
+        document.getElementById('qualification').value = p.highest_qual || '';
+        document.getElementById('children_school').value = p.children_school || '';
+        document.getElementById('children_school').dispatchEvent(new Event('change'));
+        document.getElementById('school_type').value = p.school_type || '';
+        document.getElementById('dropouts').value = p.school_dropouts || '';
+
+        const formSection = document.getElementById('patient-form-section');
+        document.getElementById('modal-body-wrapper').appendChild(formSection);
+        document.getElementById('general-modal').style.display = 'flex';
+        formVillageBanner.style.display = 'none';
     }
 
-    document.getElementById('chronic_disease').value = p.chronic_disease || '';
-    document.getElementById('vaccination_status').value = p.vaccination_status || '';
-    document.getElementById('nearest_healthcare').value = p.nearest_healthcare || '';
-
-    document.getElementById('village').value = p.village || '';
-    document.getElementById('gram_panchayat').value = p.gram_panchayat || '';
-    document.getElementById('taluk').value = p.taluk || '';
-    document.getElementById('district').value = p.district || '';
-    document.getElementById('state').value = p.state || '';
-    document.getElementById('landmark').value = p.landmark || '';
-    document.getElementById('pincode').value = p.pincode || '';
-
-    document.getElementById('is_employed').value = p.is_employed || '';
-    document.getElementById('is_employed').dispatchEvent(new Event('change'));
-
-    document.getElementById('sector').value = p.sector || '';
-    document.getElementById('sector').dispatchEvent(new Event('change'));
-
-    document.getElementById('owns_land').value = p.owns_land || 'No';
-    document.getElementById('owns_land').dispatchEvent(new Event('change'));
-
-    document.getElementById('acres').value = p.acres || '';
-    document.getElementById('sown').value = p.sown || '';
-    document.getElementById('expected_yield').value = p.expected_yield || '';
-    document.getElementById('livestocks').value = p.livestocks || '';
-
-    // New taxation demographic fields
-    if (document.getElementById('annual_income')) document.getElementById('annual_income').value = p.annual_income || '';
-    if (document.getElementById('tax_regime')) document.getElementById('tax_regime').value = p.tax_regime || '';
-
-    document.getElementById('road_access').value = p.road_access || '';
-    document.getElementById('internet').value = p.internet || '';
-    document.getElementById('transport').value = p.public_transport || '';
-    if (document.getElementById('distance_hospital')) document.getElementById('distance_hospital').value = p.distance_hospital || '';
-    if (document.getElementById('distance_school')) document.getElementById('distance_school').value = p.distance_school || '';
-    if (document.getElementById('distance_market')) document.getElementById('distance_market').value = p.distance_market || '';
-
-    document.getElementById('qualification').value = p.highest_qual || '';
-    document.getElementById('children_school').value = p.children_school || '';
-    document.getElementById('children_school').dispatchEvent(new Event('change'));
-    document.getElementById('school_type').value = p.school_type || '';
-    document.getElementById('dropouts').value = p.school_dropouts || '';
-
-    const formSection = document.getElementById('patient-form-section');
-    document.getElementById('modal-body-wrapper').appendChild(formSection);
-    document.getElementById('general-modal').style.display = 'flex';
-    formVillageBanner.style.display = 'none';
-}
-
-clearBtn.addEventListener('click', () => {
-    clearForm();
-    if (document.getElementById('general-modal').style.display === 'flex') {
-        closeModal();
+    if (clearBtn) {
+        clearBtn.addEventListener('click', () => {
+            clearForm();
+            if (document.getElementById('general-modal').style.display === 'flex') {
+                closeModal();
+            }
+        });
     }
-});
 
-function closeModal() {
-    document.getElementById('general-modal').style.display = 'none';
+    function closeModal() {
+        document.getElementById('general-modal').style.display = 'none';
 
-    // Repark the form back where it belongs
-    const formSection = document.getElementById('patient-form-section');
-    document.getElementById('panel-add-data').appendChild(formSection);
+        // Repark the form back where it belongs
+        const formSection = document.getElementById('patient-form-section');
+        document.getElementById('panel-add-data').appendChild(formSection);
 
-    // Repark the read-view back where it belongs 
-    const readView = document.getElementById('patient-read-view');
-    readView.style.display = 'none';
-    document.body.appendChild(readView);
+        // Repark the read-view back where it belongs 
+        const readView = document.getElementById('patient-read-view');
+        readView.style.display = 'none';
+        document.body.appendChild(readView);
 
-    if (activeVillage) {
-        formVillageBanner.style.display = 'flex';
+        if (activeVillage) {
+            formVillageBanner.style.display = 'flex';
+        }
+        clearForm();
     }
-    clearForm();
-}
-document.getElementById('close-modal-btn').addEventListener('click', closeModal);
+    const closeModalBtn = document.getElementById('close-modal-btn');
+    if (closeModalBtn) {
+        closeModalBtn.addEventListener('click', closeModal);
+    }
 
-function showReadModal(p) {
-    const wrapper = document.getElementById('modal-body-wrapper');
-    const readView = document.getElementById('patient-read-view');
-    const grid = document.getElementById('read-grid');
+    function showReadModal(p) {
+        const wrapper = document.getElementById('modal-body-wrapper');
+        const readView = document.getElementById('patient-read-view');
+        const grid = document.getElementById('read-grid');
 
-    document.getElementById('read-title').textContent = `${escapeHTML(p.name)}'s Profile`;
-    grid.innerHTML = '';
+        document.getElementById('read-title').textContent = `${escapeHTML(p.name)}'s Profile`;
+        grid.innerHTML = '';
 
-    const addItem = (label, val) => {
-        grid.innerHTML += `<div><strong>${label}:</strong><br/>${escapeHTML(val) || '-'}</div>`;
-    };
-
-    addItem('Mobile', p.mobile);
-    addItem('Email', p.email);
-    addItem('DOB', p.dob);
-    addItem('Caste', p.caste);
-    addItem('Gender', p.gender);
-    addItem('Marital Status', p.marital_status);
-
-    // Family length
-    addItem('Family Members Count', (p.family_members || []).length);
-    if (p.family_members && p.family_members.length > 0) {
-        const addHTMLItem = (label, val) => {
-            grid.innerHTML += `<div><strong>${label}:</strong><br/>${val || '-'}</div>`;
+        const addItem = (label, val) => {
+            grid.innerHTML += `<div><strong>${label}:</strong><br/>${escapeHTML(val) || '-'}</div>`;
         };
-        const famStr = p.family_members.map(fm => `${escapeHTML(fm.name)} (${escapeHTML(fm.relation)})<br/>${escapeHTML(fm.gender)}, ${escapeHTML(fm.marital)}, ${escapeHTML(fm.employment)}`).join('<br/><br/>');
-        addHTMLItem('Family Details', famStr);
+
+        addItem('Mobile', p.mobile);
+        addItem('Email', p.email);
+        addItem('DOB', p.dob);
+        addItem('Caste', p.caste);
+        addItem('Gender', p.gender);
+        addItem('Marital Status', p.marital_status);
+
+        // Family length
+        addItem('Family Members Count', (p.family_members || []).length);
+        if (p.family_members && p.family_members.length > 0) {
+            const addHTMLItem = (label, val) => {
+                grid.innerHTML += `<div><strong>${label}:</strong><br/>${val || '-'}</div>`;
+            };
+            const famStr = p.family_members.map(fm => `${escapeHTML(fm.name)} (${escapeHTML(fm.relation)})<br/>${escapeHTML(fm.gender)}, ${escapeHTML(fm.marital)}, ${escapeHTML(fm.employment)}`).join('<br/><br/>');
+            addHTMLItem('Family Details', famStr);
+        }
+
+        addItem('Chronic Diseases', p.chronic_disease);
+        addItem('Vaccinations', p.vaccination_status);
+        addItem('Healthcare Access', p.nearest_healthcare);
+
+        addItem('Village', p.village);
+        addItem('PIN Code', p.pincode);
+        addItem('Gram Panchayat', p.gram_panchayat);
+        addItem('Location', `${escapeHTML(p.taluk)}, ${escapeHTML(p.district)}, ${escapeHTML(p.state)}`);
+
+        addItem('Employment', p.is_employed);
+        addItem('Sector', p.sector);
+        addItem('Annual Income (₹)', p.annual_income);
+        addItem('Tax Regime', p.tax_regime);
+
+        addItem('Highest Qual.', p.highest_qual);
+
+        readView.style.display = 'block';
+        wrapper.appendChild(readView);
+        document.getElementById('general-modal').style.display = 'flex';
     }
 
-    addItem('Chronic Diseases', p.chronic_disease);
-    addItem('Vaccinations', p.vaccination_status);
-    addItem('Healthcare Access', p.nearest_healthcare);
+    function clearForm() {
+        document.getElementById('docId').value = '';
+        form.reset();
+        familyContainer.innerHTML = '';
+        memberCount = 0;
 
-    addItem('Village', p.village);
-    addItem('PIN Code', p.pincode);
-    addItem('Gram Panchayat', p.gram_panchayat);
-    addItem('Location', `${escapeHTML(p.taluk)}, ${escapeHTML(p.district)}, ${escapeHTML(p.state)}`);
+        // Trigger changes to hide dynamic fields
+        document.getElementById('is_employed').dispatchEvent(new Event('change'));
+        document.getElementById('sector').dispatchEvent(new Event('change'));
+        document.getElementById('owns_land').dispatchEvent(new Event('change'));
+        document.getElementById('children_school').dispatchEvent(new Event('change'));
 
-    addItem('Employment', p.is_employed);
-    addItem('Sector', p.sector);
-    addItem('Annual Income (₹)', p.annual_income);
-    addItem('Tax Regime', p.tax_regime);
+        currentStep = 1;
+        document.querySelectorAll('.step.completed').forEach(el => el.classList.remove('completed'));
+        document.querySelectorAll('.step-indicator .step').forEach(el => el.classList.remove('active'));
+        document.querySelectorAll('.form-step').forEach(el => el.style.display = 'none');
+        document.getElementById('step1-indicator').classList.add('active');
+        document.getElementById('step-1').style.display = 'block';
+        prevBtn.style.display = 'none';
+        nextBtn.style.display = 'inline-block';
+        submitBtn.style.display = 'none';
+    }
 
-    addItem('Highest Qual.', p.highest_qual);
+    function showMsg(msg, type) {
+        msgEl.textContent = msg;
+        msgEl.className = type;
+        setTimeout(() => { msgEl.textContent = ''; msgEl.className = ''; }, 3000);
+    }
 
-    readView.style.display = 'block';
-    wrapper.appendChild(readView);
-    document.getElementById('general-modal').style.display = 'flex';
-}
-
-function clearForm() {
-    document.getElementById('docId').value = '';
-    form.reset();
-    familyContainer.innerHTML = '';
-    memberCount = 0;
-
-    // Trigger changes to hide dynamic fields
-    document.getElementById('is_employed').dispatchEvent(new Event('change'));
-    document.getElementById('sector').dispatchEvent(new Event('change'));
-    document.getElementById('owns_land').dispatchEvent(new Event('change'));
-    document.getElementById('children_school').dispatchEvent(new Event('change'));
-
-    currentStep = 1;
-    document.querySelectorAll('.step.completed').forEach(el => el.classList.remove('completed'));
-    document.querySelectorAll('.step-indicator .step').forEach(el => el.classList.remove('active'));
-    document.querySelectorAll('.form-step').forEach(el => el.style.display = 'none');
-    document.getElementById('step1-indicator').classList.add('active');
-    document.getElementById('step-1').style.display = 'block';
-    prevBtn.style.display = 'none';
-    nextBtn.style.display = 'inline-block';
-    submitBtn.style.display = 'none';
-}
-
-function showMsg(msg, type) {
-    msgEl.textContent = msg;
-    msgEl.className = type;
-    setTimeout(() => { msgEl.textContent = ''; msgEl.className = ''; }, 3000);
-}
-
-// Search functionality
-function debounce(func, wait) {
-    let timeout;
-    return function executedFunction(...args) {
-        const later = () => {
+    // Search functionality
+    function debounce(func, wait) {
+        let timeout;
+        return function executedFunction(...args) {
+            const later = () => {
+                clearTimeout(timeout);
+                func(...args);
+            };
             clearTimeout(timeout);
-            func(...args);
+            timeout = setTimeout(later, wait);
         };
-        clearTimeout(timeout);
-        timeout = setTimeout(later, wait);
+    }
+
+    function applyPatientFilters() {
+        const term = searchInput.value.toLowerCase();
+        const filterSelect = document.getElementById('filter-village-select');
+        const villageFilter = filterSelect ? filterSelect.value : '';
+
+        const filtered = allPatients.filter(p => {
+            let matchesSearch = true;
+            let matchesVillage = true;
+
+            if (term) {
+                const nameMatch = p.name ? p.name.toLowerCase().includes(term) : false;
+                const mobileMatch = p.mobile ? String(p.mobile).includes(term) : false;
+                const villageMatch = p.village ? p.village.toLowerCase().includes(term) : false;
+                matchesSearch = nameMatch || mobileMatch || villageMatch;
+            }
+
+            if (villageFilter) {
+                matchesVillage = p.village === villageFilter;
+            }
+
+            return matchesSearch && matchesVillage;
+        });
+
+        renderPatients(filtered);
+    }
+
+    const debouncedApplyPatientFilters = debounce(applyPatientFilters, 250);
+
+    if (searchInput) {
+        searchInput.addEventListener('input', debouncedApplyPatientFilters);
+    }
+
+    const filterVillageSelect = document.getElementById('filter-village-select');
+    if (filterVillageSelect) {
+        filterVillageSelect.addEventListener('change', applyPatientFilters);
+    }
+
+    // PDF Generation
+    window.generatePDF = function (p) {
+        if (!window.jspdf) {
+            showMsg("PDF Library not loaded.", "error"); return;
+        }
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF();
+
+        // Color palette
+        const primaryColor = [46, 125, 50]; // #2e7d32
+        const lightGray = [240, 240, 240];
+
+        // Header Background
+        doc.setFillColor(...primaryColor);
+        doc.rect(0, 0, 210, 30, 'F');
+
+        // Header Text
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(22);
+        doc.setFont("helvetica", "bold");
+        doc.text("GRAM-SAMPARK", 105, 18, { align: "center" });
+
+        doc.setFontSize(10);
+        doc.setFont("helvetica", "normal");
+        doc.text("Rural Health Records & Demographics Portal", 105, 25, { align: "center" });
+
+        // Reset text color to dark gray
+        doc.setTextColor(40, 40, 40);
+
+        let y = 40;
+
+        const checkPageBreak = (neededHeight = 10) => {
+            if (y + neededHeight > 280) {
+                doc.addPage();
+                y = 20;
+                return true;
+            }
+            return false;
+        };
+
+        const addSectionHeader = (title) => {
+            checkPageBreak(15);
+            doc.setFillColor(...lightGray);
+            doc.rect(14, y - 5, 182, 8, 'F');
+            doc.setFontSize(12);
+            doc.setFont("helvetica", "bold");
+            doc.setTextColor(...primaryColor);
+            doc.text(title.toUpperCase(), 16, y);
+            doc.setTextColor(40, 40, 40);
+            y += 8;
+        };
+
+        const addField = (label, value, x = 14, autoY = true) => {
+            const valStr = (value !== undefined && value !== null && value !== '') ? String(value) : 'N/A';
+            doc.setFontSize(10);
+            doc.setFont("helvetica", "bold");
+            doc.text(`${label}:`, x, y);
+
+            // Calculate width while font is still bold
+            const labelWidth = doc.getTextWidth(`${label}: `) + 1;
+
+            doc.setFont("helvetica", "normal");
+
+            // Wrap text if needed
+            const lines = doc.splitTextToSize(valStr, (x === 14 ? 180 : 90) - labelWidth);
+            doc.text(lines, x + labelWidth, y);
+
+            if (autoY) {
+                y += (lines.length * 5) + 2;
+            }
+        };
+
+        // 1. Personal Details (2 Columns)
+        addSectionHeader("1. Personal Details");
+        checkPageBreak(30);
+
+        addField("Name", p.name, 14, false);
+        addField("Mobile", p.mobile, 110, true);
+
+        addField("DOB", p.dob, 14, false);
+        addField("Gender", p.gender, 110, true);
+
+        addField("Caste", p.caste, 14, false);
+        addField("Marital Status", p.marital_status, 110, true);
+
+        addField("Email", p.email, 14, true);
+
+        y += 2;
+
+        // 1.1 Family Members
+        if (p.family_members && p.family_members.length > 0) {
+            addSectionHeader("1.1 Family Members");
+
+            // Table Header
+            doc.setFontSize(9);
+            doc.setFont("helvetica", "bold");
+            doc.text("Name", 15, y);
+            doc.text("Relation", 65, y);
+            doc.text("Gender", 100, y);
+            doc.text("Marital", 130, y);
+            doc.text("Occupation", 160, y);
+            y += 2;
+            doc.setDrawColor(200, 200, 200);
+            doc.line(14, y, 196, y);
+            y += 5;
+
+            doc.setFont("helvetica", "normal");
+            p.family_members.forEach((fm) => {
+                checkPageBreak(10);
+                doc.text(String(fm.name).substring(0, 25), 15, y);
+                doc.text(String(fm.relation).substring(0, 15), 65, y);
+                doc.text(String(fm.gender), 100, y);
+                doc.text(String(fm.marital), 130, y);
+                doc.text(String(fm.employment).substring(0, 20), 160, y);
+                y += 6;
+            });
+            y += 2;
+        }
+
+        // 2. Health Profile
+        addSectionHeader("2. Health Profile");
+        addField("Chronic Diseases", p.chronic_disease, 14, true);
+        addField("Vaccination Status", p.vaccination_status, 14, true);
+        addField("Nearest Facility", p.nearest_healthcare, 14, true);
+        y += 2;
+
+        // 3. Location Details
+        addSectionHeader("3. Location Details");
+        addField("Village / Panchayat", `${p.village} / ${p.gram_panchayat || 'N/A'}`, 14, true);
+        addField("Block / Taluk", p.taluk, 14, false);
+        addField("District", p.district, 110, true);
+        addField("State / PIN", `${p.state} - ${p.pincode}`, 14, true);
+        addField("Landmark", p.landmark, 14, true);
+        y += 2;
+
+        // 4. Occupation & Economy
+        addSectionHeader("4. Occupation & Economy");
+        addField("Employment", `${p.is_employed} (${p.sector || 'N/A'})`, 14, false);
+        addField("Annual Income", p.annual_income ? `Rs. ${p.annual_income}` : "N/A", 110, true);
+        addField("Tax Regime", p.tax_regime, 14, false);
+        addField("Owns Land", p.owns_land, 110, true);
+
+        if (p.owns_land === "Yes" && parseFloat(p.acres) > 0) {
+            addField("Land Size", `${p.acres} acres`, 14, false);
+            addField("Crops Sown", p.sown, 110, true);
+            addField("Expected Yield", p.expected_yield, 14, true);
+        }
+        addField("Livestock", p.livestocks, 14, true);
+        y += 2;
+
+        // 5. Infrastructure Accessibility
+        addSectionHeader("5. Infrastructure");
+        addField("Road Access", p.road_access, 14, false);
+        addField("Internet", p.internet, 110, true);
+        addField("Public Transport", p.public_transport, 14, true);
+
+        doc.setFontSize(9);
+        doc.setFont("helvetica", "italic");
+        doc.setTextColor(100, 100, 100);
+        doc.text("Distances (approx km):", 14, y);
+        doc.setFont("helvetica", "normal");
+        doc.setTextColor(40, 40, 40);
+        y += 5;
+        addField("Hospital", p.distance_hospital, 15, false);
+        addField("School", p.distance_school, 75, false);
+        addField("Market", p.distance_market, 135, true);
+        y += 2;
+
+        // 6. Education
+        addSectionHeader("6. Education Details");
+        addField("Highest Qualification", p.highest_qual, 14, true);
+        addField("Children in School", p.children_school, 14, false);
+
+        if (p.children_school === "Yes") {
+            addField("School Type", p.school_type, 110, true);
+        } else {
+            y += 7; // manually advance if not showing school type
+        }
+        addField("School Dropouts in Family", p.school_dropouts, 14, true);
+
+        // Footer
+        const addFooter = () => {
+            const pageCount = doc.internal.getNumberOfPages();
+            for (let i = 1; i <= pageCount; i++) {
+                doc.setPage(i);
+                doc.setDrawColor(200, 200, 200);
+                doc.line(14, 282, 196, 282);
+                doc.setFontSize(8);
+                doc.setTextColor(120, 120, 120);
+
+                const timestamp = new Date().toLocaleString();
+                doc.text(`Digitally generated by Gram-Sampark Utility`, 14, 286);
+                doc.text(`Authorized by: ${currentUser ? currentUser.email : 'System'} | ${timestamp}`, 14, 290);
+                doc.text(`Page ${i} of ${pageCount}`, 196, 290, { align: "right" });
+            }
+        };
+        addFooter();
+
+        doc.save(`GramSampark_${(p.name || 'User').replace(/\s+/g, '_')}.pdf`);
+    }
+
+    // ?? SCHEMES LOGIC
+    let allSchemes = [];
+    function setupSchemesListener() {
+        const q = query(collection(db, 'schemes'), orderBy('name'));
+        onSnapshot(q, (snapshot) => {
+            allSchemes = [];
+            const schemesList = document.getElementById('schemes-list');
+            const schemeSelect = document.getElementById('ben-scheme-id');
+            const filterSchemeSelect = document.getElementById('filter-scheme-select');
+
+            schemesList.innerHTML = '';
+            schemeSelect.innerHTML = '<option value="">Choose Scheme...</option>';
+            if (filterSchemeSelect) filterSchemeSelect.innerHTML = '<option value="">All Schemes</option>';
+
+            snapshot.forEach(docSnap => {
+                const data = docSnap.data();
+                const id = docSnap.id;
+                allSchemes.push({ id, ...data });
+
+                // Render in dashboard
+                const card = document.createElement('div');
+                card.className = 'stat-card';
+                card.innerHTML = `
+                <h3>${escapeHTML(data.name)}</h3>
+                <p style="font-size:0.85rem; color:#888; margin-bottom:10px;">${escapeHTML(data.description)}</p>
+                <div style="font-size:0.75rem; color:#aaa;">Eligibility: ${escapeHTML(data.eligibility)}</div>
+                ${userRole === 'admin' ? `
+                    <div style="margin-top:10px;">
+                        <button class="icon-btn" onclick="editScheme('${id}')">Edit</button>
+                        <button class="icon-btn delete" onclick="deleteScheme('${id}')">Delete</button>
+                    </div>
+                ` : ''}
+            `;
+                schemesList.appendChild(card);
+
+                // Add to dropdowns
+                const opt = document.createElement('option');
+                opt.value = id;
+                opt.textContent = data.name;
+                schemeSelect.appendChild(opt);
+                if (filterSchemeSelect) {
+                    const fOpt = opt.cloneNode(true);
+                    filterSchemeSelect.appendChild(fOpt);
+                }
+            });
+        });
+    }
+
+    const addSchemeBtn = document.getElementById('add-scheme-btn');
+    if (addSchemeBtn) {
+        addSchemeBtn.addEventListener('click', () => {
+            document.getElementById('scheme-id').value = '';
+            document.getElementById('scheme-form').reset();
+            document.getElementById('scheme-form-title').textContent = 'Add Government Scheme';
+            document.getElementById('modal-body-wrapper').innerHTML = '';
+            document.getElementById('modal-body-wrapper').appendChild(document.getElementById('scheme-form-container'));
+            document.getElementById('scheme-form-container').style.display = 'block';
+            document.getElementById('general-modal').style.display = 'flex';
+        });
+    }
+
+    window.editScheme = function (id) {
+        const s = allSchemes.find(scheme => scheme.id === id);
+        if (!s) return;
+        document.getElementById('scheme-id').value = s.id;
+        document.getElementById('scheme-name').value = s.name;
+        document.getElementById('scheme-desc').value = s.description;
+        document.getElementById('scheme-eligibility').value = s.eligibility;
+        document.getElementById('scheme-form-title').textContent = 'Edit Government Scheme';
+        document.getElementById('modal-body-wrapper').innerHTML = '';
+        document.getElementById('modal-body-wrapper').appendChild(document.getElementById('scheme-form-container'));
+        document.getElementById('scheme-form-container').style.display = 'block';
+        document.getElementById('general-modal').style.display = 'flex';
     };
-}
 
-function applyPatientFilters() {
-    const term = searchInput.value.toLowerCase();
-    const filterSelect = document.getElementById('filter-village-select');
-    const villageFilter = filterSelect ? filterSelect.value : '';
-
-    const filtered = allPatients.filter(p => {
-        let matchesSearch = true;
-        let matchesVillage = true;
-
-        if (term) {
-            const nameMatch = p.name ? p.name.toLowerCase().includes(term) : false;
-            const mobileMatch = p.mobile ? String(p.mobile).includes(term) : false;
-            const villageMatch = p.village ? p.village.toLowerCase().includes(term) : false;
-            matchesSearch = nameMatch || mobileMatch || villageMatch;
+    window.deleteScheme = async function (id) {
+        if (!confirm('Are you sure you want to delete this scheme?')) return;
+        try {
+            await deleteDoc(doc(db, 'schemes', id));
+            showMsg('Scheme deleted', 'success');
+        } catch (e) {
+            showMsg(e.message, 'error');
         }
+    };
 
-        if (villageFilter) {
-            matchesVillage = p.village === villageFilter;
+    document.getElementById('scheme-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const id = document.getElementById('scheme-id').value;
+        const data = {
+            name: document.getElementById('scheme-name').value,
+            description: document.getElementById('scheme-desc').value,
+            eligibility: document.getElementById('scheme-eligibility').value,
+            updated_at: serverTimestamp()
+        };
+        try {
+            if (id) {
+                await setDoc(doc(db, 'schemes', id), data, { merge: true });
+            } else {
+                await addDoc(collection(db, 'schemes'), { ...data, created_at: serverTimestamp() });
+            }
+            closeModal();
+            showMsg('Scheme saved successfully!', 'success');
+        } catch (e) {
+            showMsg(e.message, 'error');
         }
-
-        return matchesSearch && matchesVillage;
     });
 
-    renderPatients(filtered);
-}
-
-const debouncedApplyPatientFilters = debounce(applyPatientFilters, 250);
-
-searchInput.addEventListener('input', debouncedApplyPatientFilters);
-
-const filterVillageSelect = document.getElementById('filter-village-select');
-if (filterVillageSelect) {
-    filterVillageSelect.addEventListener('change', applyPatientFilters);
-}
-
-// PDF Generation
-window.generatePDF = function (p) {
-    if (!window.jspdf) {
-        showMsg("PDF Library not loaded.", "error"); return;
-    }
-    const { jsPDF } = window.jspdf;
-    const doc = new jsPDF();
-
-    // Color palette
-    const primaryColor = [46, 125, 50]; // #2e7d32
-    const lightGray = [240, 240, 240];
-
-    // Header Background
-    doc.setFillColor(...primaryColor);
-    doc.rect(0, 0, 210, 30, 'F');
-
-    // Header Text
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(22);
-    doc.setFont("helvetica", "bold");
-    doc.text("GRAM-SAMPARK", 105, 18, { align: "center" });
-
-    doc.setFontSize(10);
-    doc.setFont("helvetica", "normal");
-    doc.text("Rural Health Records & Demographics Portal", 105, 25, { align: "center" });
-
-    // Reset text color to dark gray
-    doc.setTextColor(40, 40, 40);
-
-    let y = 40;
-
-    const checkPageBreak = (neededHeight = 10) => {
-        if (y + neededHeight > 280) {
-            doc.addPage();
-            y = 20;
-            return true;
+    // ?? BENEFICIARIES LOGIC
+    let allBeneficiaries = [];
+    function setupBeneficiariesListener() {
+        let q = query(collection(db, 'beneficiaries'), orderBy('updated_at', 'desc'));
+        if (userRole === 'surveyor') {
+            // Rules allow read all for surveyors, but we can filter for UX
+            // However, if we want to follow the rules strictly for creation:
+            // Surveyor can only create/update if assignedSurveyorId == request.auth.uid
         }
-        return false;
-    };
 
-    const addSectionHeader = (title) => {
-        checkPageBreak(15);
-        doc.setFillColor(...lightGray);
-        doc.rect(14, y - 5, 182, 8, 'F');
-        doc.setFontSize(12);
-        doc.setFont("helvetica", "bold");
-        doc.setTextColor(...primaryColor);
-        doc.text(title.toUpperCase(), 16, y);
-        doc.setTextColor(40, 40, 40);
-        y += 8;
-    };
+        onSnapshot(q, (snapshot) => {
+            allBeneficiaries = [];
+            const listEl = document.getElementById('beneficiaries-list');
+            listEl.innerHTML = '';
 
-    const addField = (label, value, x = 14, autoY = true) => {
-        const valStr = (value !== undefined && value !== null && value !== '') ? String(value) : 'N/A';
-        doc.setFontSize(10);
-        doc.setFont("helvetica", "bold");
-        doc.text(`${label}:`, x, y);
+            snapshot.forEach(docSnap => {
+                const data = docSnap.data();
+                const id = docSnap.id;
+                allBeneficiaries.push({ id, ...data });
 
-        // Calculate width while font is still bold
-        const labelWidth = doc.getTextWidth(`${label}: `) + 1;
-
-        doc.setFont("helvetica", "normal");
-
-        // Wrap text if needed
-        const lines = doc.splitTextToSize(valStr, (x === 14 ? 180 : 90) - labelWidth);
-        doc.text(lines, x + labelWidth, y);
-
-        if (autoY) {
-            y += (lines.length * 5) + 2;
-        }
-    };
-
-    // 1. Personal Details (2 Columns)
-    addSectionHeader("1. Personal Details");
-    checkPageBreak(30);
-
-    addField("Name", p.name, 14, false);
-    addField("Mobile", p.mobile, 110, true);
-
-    addField("DOB", p.dob, 14, false);
-    addField("Gender", p.gender, 110, true);
-
-    addField("Caste", p.caste, 14, false);
-    addField("Marital Status", p.marital_status, 110, true);
-
-    addField("Email", p.email, 14, true);
-
-    y += 2;
-
-    // 1.1 Family Members
-    if (p.family_members && p.family_members.length > 0) {
-        addSectionHeader("1.1 Family Members");
-
-        // Table Header
-        doc.setFontSize(9);
-        doc.setFont("helvetica", "bold");
-        doc.text("Name", 15, y);
-        doc.text("Relation", 65, y);
-        doc.text("Gender", 100, y);
-        doc.text("Marital", 130, y);
-        doc.text("Occupation", 160, y);
-        y += 2;
-        doc.setDrawColor(200, 200, 200);
-        doc.line(14, y, 196, y);
-        y += 5;
-
-        doc.setFont("helvetica", "normal");
-        p.family_members.forEach((fm) => {
-            checkPageBreak(10);
-            doc.text(String(fm.name).substring(0, 25), 15, y);
-            doc.text(String(fm.relation).substring(0, 15), 65, y);
-            doc.text(String(fm.gender), 100, y);
-            doc.text(String(fm.marital), 130, y);
-            doc.text(String(fm.employment).substring(0, 20), 160, y);
-            y += 6;
+                const schemeName = allSchemes.find(s => s.id === data.schemeId)?.name || 'Unknown Scheme';
+                const div = document.createElement('div');
+                div.className = 'list-row';
+                div.innerHTML = `
+                <div class="col-name">
+                    <div class="primary-text">${escapeHTML(data.citizenName)}</div>
+                    <div class="secondary-text">Registered by: ${escapeHTML(data.assignedSurveyorEmail || 'Admin')}</div>
+                </div>
+                <div class="col-info">
+                    <div class="primary-text">${escapeHTML(schemeName)}</div>
+                </div>
+                <div class="col-location">
+                    <span class="badge ${data.status === 'Approved' ? 'badge-success' : 'badge-warning'}">${data.status}</span>
+                </div>
+                <div class="col-actions">
+                    <button class="icon-btn" onclick="editBeneficiary('${id}')">Edit</button>
+                    ${userRole === 'admin' ? `<button class="icon-btn delete" onclick="deleteBeneficiary('${id}')">Delete</button>` : ''}
+                </div>
+            `;
+                listEl.appendChild(div);
+            });
         });
-        y += 2;
     }
 
-    // 2. Health Profile
-    addSectionHeader("2. Health Profile");
-    addField("Chronic Diseases", p.chronic_disease, 14, true);
-    addField("Vaccination Status", p.vaccination_status, 14, true);
-    addField("Nearest Facility", p.nearest_healthcare, 14, true);
-    y += 2;
-
-    // 3. Location Details
-    addSectionHeader("3. Location Details");
-    addField("Village / Panchayat", `${p.village} / ${p.gram_panchayat || 'N/A'}`, 14, true);
-    addField("Block / Taluk", p.taluk, 14, false);
-    addField("District", p.district, 110, true);
-    addField("State / PIN", `${p.state} - ${p.pincode}`, 14, true);
-    addField("Landmark", p.landmark, 14, true);
-    y += 2;
-
-    // 4. Occupation & Economy
-    addSectionHeader("4. Occupation & Economy");
-    addField("Employment", `${p.is_employed} (${p.sector || 'N/A'})`, 14, false);
-    addField("Annual Income", p.annual_income ? `Rs. ${p.annual_income}` : "N/A", 110, true);
-    addField("Tax Regime", p.tax_regime, 14, false);
-    addField("Owns Land", p.owns_land, 110, true);
-
-    if (p.owns_land === "Yes" && parseFloat(p.acres) > 0) {
-        addField("Land Size", `${p.acres} acres`, 14, false);
-        addField("Crops Sown", p.sown, 110, true);
-        addField("Expected Yield", p.expected_yield, 14, true);
+    const addBenBtn = document.getElementById('add-beneficiary-btn');
+    if (addBenBtn) {
+        addBenBtn.addEventListener('click', () => {
+            document.getElementById('beneficiary-id').value = '';
+            document.getElementById('beneficiary-form').reset();
+            updateBeneficiaryCitizenDropdown();
+            document.getElementById('beneficiary-form-title').textContent = 'Register New Beneficiary';
+            document.getElementById('modal-body-wrapper').innerHTML = '';
+            document.getElementById('modal-body-wrapper').appendChild(document.getElementById('beneficiary-form-container'));
+            document.getElementById('beneficiary-form-container').style.display = 'block';
+            document.getElementById('general-modal').style.display = 'flex';
+        });
     }
-    addField("Livestock", p.livestocks, 14, true);
-    y += 2;
 
-    // 5. Infrastructure Accessibility
-    addSectionHeader("5. Infrastructure");
-    addField("Road Access", p.road_access, 14, false);
-    addField("Internet", p.internet, 110, true);
-    addField("Public Transport", p.public_transport, 14, true);
-
-    doc.setFontSize(9);
-    doc.setFont("helvetica", "italic");
-    doc.setTextColor(100, 100, 100);
-    doc.text("Distances (approx km):", 14, y);
-    doc.setFont("helvetica", "normal");
-    doc.setTextColor(40, 40, 40);
-    y += 5;
-    addField("Hospital", p.distance_hospital, 15, false);
-    addField("School", p.distance_school, 75, false);
-    addField("Market", p.distance_market, 135, true);
-    y += 2;
-
-    // 6. Education
-    addSectionHeader("6. Education Details");
-    addField("Highest Qualification", p.highest_qual, 14, true);
-    addField("Children in School", p.children_school, 14, false);
-
-    if (p.children_school === "Yes") {
-        addField("School Type", p.school_type, 110, true);
-    } else {
-        y += 7; // manually advance if not showing school type
+    function updateBeneficiaryCitizenDropdown() {
+        const dropdown = document.getElementById('ben-citizen-id');
+        if (!dropdown) return;
+        dropdown.innerHTML = '<option value="">Choose Citizen...</option>';
+        allPatients.forEach(p => {
+            const opt = document.createElement('option');
+            opt.value = p.id;
+            opt.textContent = `${p.name} (${p.village})`;
+            dropdown.appendChild(opt);
+        });
     }
-    addField("School Dropouts in Family", p.school_dropouts, 14, true);
 
-    // Footer
-    const addFooter = () => {
-        const pageCount = doc.internal.getNumberOfPages();
-        for (let i = 1; i <= pageCount; i++) {
-            doc.setPage(i);
-            doc.setDrawColor(200, 200, 200);
-            doc.line(14, 282, 196, 282);
-            doc.setFontSize(8);
-            doc.setTextColor(120, 120, 120);
+    window.editBeneficiary = function (id) {
+        const b = allBeneficiaries.find(ben => ben.id === id);
+        if (!b) return;
+        updateBeneficiaryCitizenDropdown();
+        document.getElementById('beneficiary-id').value = b.id;
+        document.getElementById('ben-citizen-id').value = b.citizenId || '';
+        document.getElementById('ben-scheme-id').value = b.schemeId;
+        document.getElementById('ben-status').value = b.status;
+        document.getElementById('ben-notes').value = b.notes || '';
+        document.getElementById('beneficiary-form-title').textContent = 'Edit Beneficiary Application';
+        document.getElementById('modal-body-wrapper').innerHTML = '';
+        document.getElementById('modal-body-wrapper').appendChild(document.getElementById('beneficiary-form-container'));
+        document.getElementById('beneficiary-form-container').style.display = 'block';
+        document.getElementById('general-modal').style.display = 'flex';
+    };
 
-            const timestamp = new Date().toLocaleString();
-            doc.text(`Digitally generated by Gram-Sampark Utility`, 14, 286);
-            doc.text(`Authorized by: ${currentUser ? currentUser.email : 'System'} | ${timestamp}`, 14, 290);
-            doc.text(`Page ${i} of ${pageCount}`, 196, 290, { align: "right" });
+    window.deleteBeneficiary = async function (id) {
+        if (!confirm('Remove this beneficiary application?')) return;
+        try {
+            await deleteDoc(doc(db, 'beneficiaries', id));
+            showMsg('Beneficiary removed', 'success');
+        } catch (e) {
+            showMsg(e.message, 'error');
         }
     };
-    addFooter();
 
-    doc.save(`GramSampark_${(p.name || 'User').replace(/\s+/g, '_')}.pdf`);
-}
+    document.getElementById('beneficiary-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const id = document.getElementById('beneficiary-id').value;
+        const citizenSelect = document.getElementById('ben-citizen-id');
+        const selectedOption = citizenSelect.options[citizenSelect.selectedIndex];
+        const citizenName = selectedOption ? selectedOption.text.split(' (')[0] : '';
 
-// Interactive Cursor Background (Optimized)
-const cursorGlow = document.getElementById('cursor-glow');
-if (cursorGlow) {
-    cursorGlow.style.pointerEvents = 'none';
-    cursorGlow.style.zIndex = '-1';
-}
-let mouseX = window.innerWidth / 2;
-let mouseY = window.innerHeight / 2;
-let glowX = mouseX;
-let glowY = mouseY;
-let isTabActive = true;
+        const data = {
+            citizenId: citizenSelect.value,
+            citizenName: citizenName,
+            schemeId: document.getElementById('ben-scheme-id').value,
+            status: document.getElementById('ben-status').value,
+            notes: document.getElementById('ben-notes').value,
+            assignedSurveyorId: currentUser.uid,
+            assignedSurveyorEmail: currentUser.email,
+            updated_at: serverTimestamp()
+        };
+        try {
+            if (id) {
+                await setDoc(doc(db, 'beneficiaries', id), data, { merge: true });
+            } else {
+                await addDoc(collection(db, 'beneficiaries'), { ...data, created_at: serverTimestamp() });
+            }
+            closeModal();
+            showMsg('Beneficiary application saved!', 'success');
+        } catch (e) {
+            showMsg(e.message, 'error');
+        }
+    });
 
-document.addEventListener('visibilitychange', () => {
-    isTabActive = !document.hidden;
-});
-
-// Avoid executing heavy logic on every mouse event, just record position
-document.addEventListener('mousemove', (e) => {
-    mouseX = e.clientX;
-    mouseY = e.clientY;
-}, { passive: true });
-
-function animateGlow() {
-    if (cursorGlow && isTabActive) {
-        // Linear interpolation for buttery smooth following
-        glowX += (mouseX - glowX) * 0.06;
-        glowY += (mouseY - glowY) * 0.06;
-        
-        // Use translate3d to offload rendering to GPU and avoid layout reflows
-        cursorGlow.style.transform = `translate3d(${glowX - (cursorGlow.offsetWidth/2)}px, ${glowY - (cursorGlow.offsetHeight/2)}px, 0)`;
+    const cursorGlow = document.getElementById('cursor-glow');
+    if (cursorGlow) {
+        cursorGlow.style.pointerEvents = 'none';
+        cursorGlow.style.zIndex = '-1';
     }
-    requestAnimationFrame(animateGlow);
+    let mouseX = window.innerWidth / 2;
+    let mouseY = window.innerHeight / 2;
+    let glowX = mouseX;
+    let glowY = mouseY;
+    let isTabActive = true;
+
+    document.addEventListener('visibilitychange', () => {
+        isTabActive = !document.hidden;
+    });
+
+    // Avoid executing heavy logic on every mouse event, just record position
+    document.addEventListener('mousemove', (e) => {
+        mouseX = e.clientX;
+        mouseY = e.clientY;
+    }, { passive: true });
+
+    function animateGlow() {
+        if (cursorGlow && isTabActive) {
+            // Linear interpolation for buttery smooth following
+            glowX += (mouseX - glowX) * 0.06;
+            glowY += (mouseY - glowY) * 0.06;
+
+            // Use translate3d to offload rendering to GPU and avoid layout reflows
+            cursorGlow.style.transform = `translate3d(${glowX - (cursorGlow.offsetWidth / 2)}px, ${glowY - (cursorGlow.offsetHeight / 2)}px, 0)`;
+        }
+        requestAnimationFrame(animateGlow);
+    animateGlow();
 }
-animateGlow();

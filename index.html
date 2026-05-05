@@ -10,6 +10,14 @@
     <link rel="manifest" href="manifest.json">
 
     <meta name="google" value="notranslate">
+    <script>
+        window.onerror = function(msg, url, lineNo, columnNo, error) {
+            var errorInfo = 'Error: ' + msg + '\nURL: ' + url + '\nLine: ' + lineNo + '\nColumn: ' + columnNo + '\nStackTrace: ' + (error ? error.stack : '');
+            console.log(errorInfo);
+            alert(errorInfo); // Alert so we definitely see it in the screenshot
+            return false;
+        };
+    </script>
 </head>
 
 <body>
@@ -90,8 +98,49 @@
                             </div>
 
                             <form id="login-form" class="auth-form">
+                                <!-- Signup Extra Fields -->
+                                <div id="signup-extra-fields" style="display: none;">
+                                    <div class="form-group input-with-icon">
+                                        <label for="fullname">Full Name</label>
+                                        <div class="input-shell">
+                                            <span class="input-icon" aria-hidden="true">
+                                                <svg viewBox="0 0 24 24" fill="none">
+                                                    <path d="M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM6 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+                                                </svg>
+                                            </span>
+                                            <input type="text" id="fullname" placeholder="Enter your full name">
+                                        </div>
+                                    </div>
+
+                                    <div class="form-group input-with-icon">
+                                        <label for="mobile_number">Mobile Number</label>
+                                        <div class="input-shell">
+                                            <span class="input-icon" aria-hidden="true">
+                                                <svg viewBox="0 0 24 24" fill="none">
+                                                    <path d="M7 3.25h10a2 2 0 0 1 2 2v13.5a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5.25a2 2 0 0 1 2-2Z" stroke="currentColor" stroke-width="1.6"/>
+                                                    <path d="M11 17h2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+                                                </svg>
+                                            </span>
+                                            <input type="tel" id="mobile_number" placeholder="Enter mobile number">
+                                        </div>
+                                    </div>
+
+                                    <div class="form-group input-with-icon">
+                                        <label for="personal_email">Personal Email</label>
+                                        <div class="input-shell">
+                                            <span class="input-icon" aria-hidden="true">
+                                                <svg viewBox="0 0 24 24" fill="none">
+                                                    <path d="M4 6.75h16v10.5a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 17.25V6.75Z" stroke="currentColor" stroke-width="1.6" />
+                                                    <path d="m4.5 7.5 7.004 5.253a.833.833 0 0 0 .992 0L19.5 7.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+                                                </svg>
+                                            </span>
+                                            <input type="email" id="personal_email" placeholder="personal@example.com">
+                                        </div>
+                                    </div>
+                                </div>
+
                                 <div class="form-group input-with-icon">
-                                    <label for="email">Email address</label>
+                                    <label for="email">Account Email (for login)</label>
                                     <div class="input-shell">
                                         <span class="input-icon" aria-hidden="true">
                                             <svg viewBox="0 0 24 24" fill="none">
@@ -703,6 +752,45 @@
                         </section>
                     </div>
 
+                    <div id="panel-schemes" class="tab-panel">
+                        <section class="panel-card">
+                            <div class="section-heading">
+                                <div>
+                                    <span class="eyebrow">Public Welfare</span>
+                                    <h2>Government Schemes</h2>
+                                </div>
+                                <button id="add-scheme-btn" class="primary btn-sm admin-only">Add New Scheme</button>
+                            </div>
+                            <div id="schemes-list" class="dashboard-grid"></div>
+                        </section>
+                    </div>
+
+                    <div id="panel-beneficiaries" class="tab-panel">
+                        <section class="panel-card">
+                            <div class="section-heading">
+                                <div>
+                                    <span class="eyebrow">Welfare Tracking</span>
+                                    <h2>Scheme Beneficiaries</h2>
+                                </div>
+                                <button id="add-beneficiary-btn" class="primary btn-sm">Add Beneficiary</button>
+                            </div>
+                            <div class="records-toolbar">
+                                <select id="filter-scheme-select">
+                                    <option value="">All Schemes</option>
+                                </select>
+                                <div class="search-shell">
+                                    <svg viewBox="0 0 24 24" fill="none">
+                                        <circle cx="11" cy="11" r="6.5" stroke="currentColor" stroke-width="1.8" />
+                                        <path d="m16 16 4 4" stroke="currentColor" stroke-width="1.8"
+                                            stroke-linecap="round" />
+                                    </svg>
+                                    <input type="text" id="beneficiary-search-input" placeholder="Search beneficiaries...">
+                                </div>
+                            </div>
+                            <div id="beneficiaries-list" class="list-container"></div>
+                        </section>
+                    </div>
+
                     <div id="panel-view-data" class="tab-panel">
                         <section class="panel-card">
                             <div class="section-heading">
@@ -741,6 +829,74 @@
             <div id="patient-read-view" style="display: none;">
                 <h2 id="read-title"></h2>
                 <div id="read-grid"></div>
+            </div>
+
+            <!-- New Form for Schemes -->
+            <div id="scheme-form-container" style="display: none;">
+                <h2 id="scheme-form-title">Add Government Scheme</h2>
+                <form id="scheme-form" class="auth-form">
+                    <input type="hidden" id="scheme-id">
+                    <div class="form-group">
+                        <label for="scheme-name">Scheme Name</label>
+                        <input type="text" id="scheme-name" required placeholder="e.g. PM-Kisan">
+                    </div>
+                    <div class="form-group">
+                        <label for="scheme-desc">Description</label>
+                        <textarea id="scheme-desc" required placeholder="Briefly describe the scheme goals..."></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="scheme-eligibility">Eligibility Criteria</label>
+                        <select id="scheme-eligibility" required>
+                            <option value="">Select Criteria...</option>
+                            <option value="Below Poverty Line (BPL)">Below Poverty Line (BPL)</option>
+                            <option value="Small & Marginal Farmers">Small & Marginal Farmers</option>
+                            <option value="Senior Citizens (60+)">Senior Citizens (60+)</option>
+                            <option value="Women & Children">Women & Children</option>
+                            <option value="Unemployed Youth">Unemployed Youth</option>
+                            <option value="Specific Caste Group (SC/ST)">Specific Caste Group (SC/ST)</option>
+                            <option value="All Rural Citizens">All Rural Citizens</option>
+                        </select>
+                    </div>
+                    <div class="form-actions">
+                        <button type="submit" class="primary">Save Scheme</button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- New Form for Beneficiaries -->
+            <div id="beneficiary-form-container" style="display: none;">
+                <h2 id="beneficiary-form-title">Register Beneficiary</h2>
+                <form id="beneficiary-form" class="auth-form">
+                    <input type="hidden" id="beneficiary-id">
+                    <div class="form-group">
+                        <label for="ben-citizen-id">Select Citizen (From My Assigned Villages)</label>
+                        <select id="ben-citizen-id" required>
+                            <option value="">Choose Citizen...</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="ben-scheme-id">Select Scheme</label>
+                        <select id="ben-scheme-id" required>
+                            <option value="">Choose Scheme...</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="ben-status">Application Status</label>
+                        <select id="ben-status" required>
+                            <option value="Applied">Applied</option>
+                            <option value="Pending">Pending</option>
+                            <option value="Approved">Approved</option>
+                            <option value="Rejected">Rejected</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="ben-notes">Officer Notes</label>
+                        <textarea id="ben-notes"></textarea>
+                    </div>
+                    <div class="form-actions">
+                        <button type="submit" class="primary">Submit Application</button>
+                    </div>
+                </form>
             </div>
         </div>
     </div>
