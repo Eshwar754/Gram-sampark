@@ -116,6 +116,7 @@ const formTargetVillage = document.getElementById('form-target-village');
 
 // Patient UI Elements
 const statusIndicator = document.getElementById('status-indicator');
+const debugPanelContent = document.getElementById('debug-panel-content');
 const form = document.getElementById('patient-form');
 const patientListEl = document.getElementById('patient-list');
 const msgEl = document.getElementById('form-msg');
@@ -324,6 +325,39 @@ function getPendingPatientsStorageKey() {
     return `gram-sampark-pending-patients-${userKey}`;
 }
 
+function updateDebugPanel(extra = {}) {
+    if (!debugPanelContent) return;
+
+    const pendingPatients = loadPendingPatients();
+    const selectedVillageValue = document.getElementById('village')?.value?.trim() || '';
+    const lines = [
+        `online: ${navigator.onLine}`,
+        `user uid: ${currentUser?.uid || 'none'}`,
+        `user email: ${currentUser?.email || 'none'}`,
+        `role: ${userRole || 'unknown'}`,
+        `status: ${userStatus || 'unknown'}`,
+        `active village: ${activeVillage?.name || 'none'}`,
+        `active village id: ${activeVillage?.id || 'none'}`,
+        `selected village field: ${selectedVillageValue || 'none'}`,
+        `assigned village ids: ${userAssignedVillages.map(v => v.id).join(', ') || 'none'}`,
+        `assigned village names: ${userAssignedVillages.map(v => v.name).join(', ') || 'none'}`,
+        `pending queue count: ${pendingPatients.length}`
+    ];
+
+    if (pendingPatients.length > 0) {
+        const nextPending = pendingPatients[0];
+        lines.push(`next pending village: ${nextPending.data?.village || 'none'}`);
+        lines.push(`next pending village_id: ${nextPending.data?.village_id || 'none'}`);
+        lines.push(`next pending error: ${nextPending.syncError || 'none'}`);
+    }
+
+    Object.entries(extra).forEach(([key, value]) => {
+        lines.push(`${key}: ${value}`);
+    });
+
+    debugPanelContent.textContent = lines.join('\n');
+}
+
 function loadPendingPatients() {
     try {
         const raw = localStorage.getItem(getPendingPatientsStorageKey());
@@ -338,6 +372,7 @@ function loadPendingPatients() {
 function savePendingPatients(queue) {
     try {
         localStorage.setItem(getPendingPatientsStorageKey(), JSON.stringify(queue));
+        updateDebugPanel();
     } catch (error) {
         console.error('Failed to save pending patients:', error);
     }
@@ -420,6 +455,8 @@ function refreshPatientListFromSources() {
     if (userRole !== 'admin') {
         updateUserDashboardStats();
     }
+
+    updateDebugPanel();
 }
 
 async function syncPendingPatients() {
@@ -450,6 +487,10 @@ async function syncPendingPatients() {
                     showMsg(`Patient sync failed: ${errText}`, 'error');
                 }
                 queuePendingPatient({ ...entry, syncError: error.message || 'Sync failed' });
+                updateDebugPanel({
+                    last_sync_error: error?.code || 'unknown',
+                    last_sync_message: error?.message || 'Sync failed'
+                });
             }
         }
     } finally {
@@ -468,6 +509,8 @@ function updateOnlineStatus() {
         statusIndicator.textContent = 'Offline (Changes will save locally)';
         statusIndicator.className = 'status offline';
     }
+
+    updateDebugPanel();
 }
 window.addEventListener('online', updateOnlineStatus);
 window.addEventListener('offline', updateOnlineStatus);
@@ -579,6 +622,8 @@ onAuthStateChanged(auth, async (user) => {
             await setDoc(userDocRef, { email: user.email, role: 'user', status: 'pending' });
         }
 
+        updateDebugPanel();
+
         document.body.className = userRole === 'admin' ? 'role-admin' : '';
 
         if (userRole === 'admin') {
@@ -664,6 +709,7 @@ onAuthStateChanged(auth, async (user) => {
         if (userInfo) userInfo.textContent = '';
         if (logoutBtn) logoutBtn.style.display = 'none';
         if (loginSection) loginSection.style.display = 'flex';
+        updateDebugPanel();
         if (appContainer) appContainer.style.display = 'none';
         if (pendingSection) pendingSection.style.display = 'none';
 
@@ -1130,6 +1176,7 @@ async function fetchAssignedVillages(user) {
 
         setupFormVillageInput(); // Re-render dropdown 
         setupPatientListener(); // Re-render patient list based on new villages
+        updateDebugPanel();
 
         if (userRole !== 'admin') {
             activeVillageSelect.innerHTML = '<option value="">Select Village...</option>';
@@ -1203,6 +1250,7 @@ function setupFormVillageInput() {
         container.appendChild(select);
         select.addEventListener('change', (e) => {
             activeVillage = allVillagesCache.find(v => v.name === e.target.value) || null;
+            updateDebugPanel();
         });
     } else {
         const input = document.createElement('input');
@@ -1213,6 +1261,10 @@ function setupFormVillageInput() {
         input.defaultValue = activeVillage ? activeVillage.name : (userAssignedVillages.length > 0 ? userAssignedVillages[0].name : '');
         input.value = input.defaultValue;
         container.appendChild(input);
+        if (!activeVillage && userAssignedVillages.length > 0) {
+            activeVillage = userAssignedVillages[0];
+        }
+        updateDebugPanel();
 
         userAssignedVillages.forEach(v => {
             if (filterSelect) {

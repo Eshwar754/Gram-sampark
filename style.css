@@ -1040,6 +1040,43 @@ body.role-admin .flex.admin-only {
     border-color: rgba(245, 158, 11, 0.22);
 }
 
+.hero-status-stack {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.8rem;
+}
+
+.debug-panel {
+    width: min(28rem, 100%);
+    border: 1px solid rgba(148, 163, 184, 0.22);
+    border-radius: 18px;
+    background: rgba(255, 255, 255, 0.88);
+    box-shadow: var(--shadow-xs);
+    backdrop-filter: blur(12px);
+}
+
+.debug-panel summary {
+    cursor: pointer;
+    list-style: none;
+    padding: 0.85rem 1rem;
+    font-weight: 700;
+    color: #0f766e;
+}
+
+.debug-panel summary::-webkit-details-marker {
+    display: none;
+}
+
+.debug-panel-content {
+    padding: 0 1rem 1rem;
+    font-size: 0.86rem;
+    color: #334155;
+    white-space: pre-wrap;
+    word-break: break-word;
+    line-height: 1.55;
+}
+
 .tab-panel {
     display: none;
     opacity: 0;
