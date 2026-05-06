@@ -316,12 +316,154 @@ function getFamilyData() {
 
 // Keep track of all fetched patients for searching
 let allPatients = [];
+let serverPatients = [];
+let isSyncingPendingPatients = false;
+
+function getPendingPatientsStorageKey() {
+    const userKey = currentUser?.uid || 'guest';
+    return `gram-sampark-pending-patients-${userKey}`;
+}
+
+function loadPendingPatients() {
+    try {
+        const raw = localStorage.getItem(getPendingPatientsStorageKey());
+        const parsed = raw ? JSON.parse(raw) : [];
+        return Array.isArray(parsed) ? parsed : [];
+    } catch (error) {
+        console.error('Failed to load pending patients:', error);
+        return [];
+    }
+}
+
+function savePendingPatients(queue) {
+    try {
+        localStorage.setItem(getPendingPatientsStorageKey(), JSON.stringify(queue));
+    } catch (error) {
+        console.error('Failed to save pending patients:', error);
+    }
+}
+
+function queuePendingPatient(entry) {
+    const queue = loadPendingPatients();
+    const existingIndex = queue.findIndex(item => item.localQueueId === entry.localQueueId);
+    if (existingIndex >= 0) {
+        queue[existingIndex] = entry;
+    } else {
+        queue.push(entry);
+    }
+    savePendingPatients(queue);
+}
+
+function removePendingPatient(localQueueId) {
+    const queue = loadPendingPatients().filter(item => item.localQueueId !== localQueueId);
+    savePendingPatients(queue);
+}
+
+function buildQueueSafePatientData(data, mode) {
+    const queueSafeData = deepSanitize({ ...data });
+    delete queueSafeData.updated_at;
+    delete queueSafeData.created_at;
+
+    return {
+        ...queueSafeData,
+        _queueMeta: {
+            mode,
+            queued_at: Date.now()
+        }
+    };
+}
+
+function buildFirestorePatientPayload(entry) {
+    const data = { ...entry.data };
+    delete data._queueMeta;
+
+    return {
+        ...data,
+        updated_at: serverTimestamp(),
+        ...(entry.docId ? {} : { created_at: serverTimestamp() })
+    };
+}
+
+function buildPendingPatientRecord(entry) {
+    const queueMeta = entry.data?._queueMeta || {};
+    return {
+        id: entry.docId || `local-${entry.localQueueId}`,
+        source: entry.syncError ? 'Sync Error' : 'Local',
+        isPendingLocal: true,
+        localQueueId: entry.localQueueId,
+        syncError: entry.syncError || '',
+        client_timestamp: entry.data?.client_timestamp || queueMeta.queued_at || Date.now(),
+        ...entry.data
+    };
+}
+
+function refreshPatientListFromSources() {
+    const pendingPatients = loadPendingPatients().map(buildPendingPatientRecord);
+    const pendingByDocId = new Map(
+        pendingPatients
+            .filter(patient => patient.id && !String(patient.id).startsWith('local-'))
+            .map(patient => [patient.id, patient])
+    );
+
+    const merged = serverPatients.map(patient => pendingByDocId.get(patient.id) || patient);
+    const pendingCreates = pendingPatients.filter(patient => String(patient.id).startsWith('local-'));
+
+    allPatients = [...merged, ...pendingCreates];
+    allPatients.sort((a, b) => {
+        const timeA = a.client_timestamp || (a.updated_at && typeof a.updated_at.toMillis === 'function' ? a.updated_at.toMillis() : 0);
+        const timeB = b.client_timestamp || (b.updated_at && typeof b.updated_at.toMillis === 'function' ? b.updated_at.toMillis() : 0);
+        return timeB - timeA;
+    });
+
+    applyPatientFilters();
+
+    if (userRole !== 'admin') {
+        updateUserDashboardStats();
+    }
+}
+
+async function syncPendingPatients() {
+    if (isSyncingPendingPatients || !navigator.onLine || !currentUser) return;
+
+    const queue = loadPendingPatients();
+    if (!queue.length) {
+        refreshPatientListFromSources();
+        return;
+    }
+
+    isSyncingPendingPatients = true;
+
+    try {
+        for (const entry of queue) {
+            try {
+                const payload = buildFirestorePatientPayload(entry);
+                if (entry.docId) {
+                    await setDoc(doc(db, "patients", entry.docId), payload, { merge: true });
+                } else {
+                    await addDoc(collection(db, "patients"), payload);
+                }
+                removePendingPatient(entry.localQueueId);
+            } catch (error) {
+                console.error('Pending patient sync failed:', error);
+                if (typeof showMsg === 'function') {
+                    const errText = error?.code ? `${error.code}: ${error.message}` : (error?.message || 'Sync failed');
+                    showMsg(`Patient sync failed: ${errText}`, 'error');
+                }
+                queuePendingPatient({ ...entry, syncError: error.message || 'Sync failed' });
+            }
+        }
+    } finally {
+        isSyncingPendingPatients = false;
+        refreshPatientListFromSources();
+    }
+}
 
 // Monitor Network Status
 function updateOnlineStatus() {
     if (navigator.onLine) {
         statusIndicator.textContent = 'Online & Syncing';
         statusIndicator.className = 'status online';
+        syncPendingPatients().catch(error => console.error('Online sync failed:', error));
     } else {
         statusIndicator.textContent = 'Offline (Changes will save locally)';
         statusIndicator.className = 'status offline';
@@ -471,6 +613,7 @@ onAuthStateChanged(auth, async (user) => {
             setupPatientListener();
             setupSchemesListener();
             setupBeneficiariesListener();
+            syncPendingPatients().catch(error => console.error('Initial pending sync failed:', error));
         } else {
             // Pending or Rejected user
             if (appContainer) appContainer.style.display = 'none';
@@ -516,6 +659,8 @@ onAuthStateChanged(auth, async (user) => {
         userStatus = 'pending';
         userAssignedVillages = [];
         activeVillage = null;
+        serverPatients = [];
+        allPatients = [];
         if (userInfo) userInfo.textContent = '';
         if (logoutBtn) logoutBtn.style.display = 'none';
         if (loginSection) loginSection.style.display = 'flex';
@@ -569,7 +714,7 @@ function setupPatientListener() {
     let q;
     if (userRole === 'admin') {
         // Admins see everything
-        q = query(collection(db, "patients"), orderBy("updated_at", "desc"));
+        q = query(collection(db, "patients"));
     } else {
         // Check if user has any assigned villages to avoid query errors
         if (userAssignedVillages && userAssignedVillages.length > 0) {
@@ -577,28 +722,24 @@ function setupPatientListener() {
             // Firestore rules use village_id for surveyors
             q = query(
                 collection(db, "patients"),
-                where("village_id", "in", villageIds),
-                orderBy("updated_at", "desc")
+                where("village_id", "in", villageIds)
             );
         } else {
             // If no villages are assigned, show nothing (or handle as needed)
-            renderPatients([]);
+            serverPatients = [];
+            refreshPatientListFromSources();
             return;
         }
     }
 
     patientUnsubscribe = onSnapshot(q, { includeMetadataChanges: true }, (snapshot) => {
-        allPatients = [];
+        serverPatients = [];
         snapshot.forEach((docSnap) => {
             const data = docSnap.data();
             const source = docSnap.metadata.hasPendingWrites ? "Local" : "Server";
-            allPatients.push({ id: docSnap.id, source, ...data });
+            serverPatients.push({ id: docSnap.id, source, ...data });
         });
-        renderPatients(allPatients);
-
-        if (userRole !== 'admin') {
-            updateUserDashboardStats();
-        }
+        refreshPatientListFromSources();
     }, (error) => {
         console.error("Patient list error:", error);
         // Note: You may need to create a composite index in Firebase Console 
@@ -897,10 +1038,11 @@ window.updateUserRole = async function (uid, newRole) {
 window.approveUser = async function (uid) {
     try {
         await setDoc(doc(db, 'users', uid), {
+            role: 'surveyor',
             status: 'approved',
             approved_at: serverTimestamp()
         }, { merge: true });
-        showAdminMsg('User approved!', 'success');
+        showAdminMsg('User approved and surveyor access granted!', 'success');
     } catch (e) {
         showAdminMsg(e.message, 'error');
     }
@@ -1104,11 +1246,17 @@ function renderPatients(patients) {
         const div = document.createElement('div');
         div.className = 'list-row';
         const dateStr = p.updated_at ? new Date(p.client_timestamp || p.updated_at.toDate()).toLocaleDateString() : 'Pending';
+        const sourceBadgeClass = p.source === 'Server' ? 'badge-success' : 'badge-warning';
+        const sourceTitle = p.syncError ? `Sync failed: ${p.syncError}` : p.source;
 
         div.innerHTML = `
             <div class="col-name">
-                <div class="primary-text">${escapeHTML(p.name)}</div>
+                <div class="primary-text">
+                    ${escapeHTML(p.name)}
+                    <span class="badge ${sourceBadgeClass}" style="margin-left: 8px; font-size: 0.7rem;" title="${escapeHTML(sourceTitle)}">${escapeHTML(p.source)}</span>
+                </div>
                 <div class="secondary-text">${p.mobile ? escapeHTML(p.mobile) : 'No Mobile'}</div>
+                ${p.syncError ? `<div class="secondary-text" style="color:#b42318; margin-top:4px;">${escapeHTML(p.syncError)}</div>` : ''}
             </div>
             <div class="col-info">
                 <div class="primary-text">${escapeHTML(p.gender)}</div>
@@ -1235,7 +1383,7 @@ if (form) {
             nearest_healthcare: document.getElementById('nearest_healthcare').value.trim(),
 
             village: activeVillage ? activeVillage.name : document.getElementById('village').value.trim(),
-            village_id: activeVillage ? String(activeVillage.id) : (allVillagesCache.find(v => v.name === document.getElementById('village').value.trim())?.id || ''),
+            village_id: activeVillage ? String(activeVillage.id) : ((allVillagesCache.length > 0 ? allVillagesCache : userAssignedVillages).find(v => v.name === document.getElementById('village').value.trim())?.id || ''),
             gram_panchayat: document.getElementById('gram_panchayat').value.trim(),
             taluk: document.getElementById('taluk').value.trim(),
             district: document.getElementById('district').value.trim(),
@@ -1267,13 +1415,14 @@ if (form) {
             school_dropouts: document.getElementById('dropouts').value,
 
             assigned_by_email: currentUser.email, // Assign to current user
-            village_id: activeVillage ? String(activeVillage.id) : (allVillagesCache.find(v => v.name === document.getElementById('village').value.trim())?.id || ''),
+            village_id: activeVillage ? String(activeVillage.id) : ((allVillagesCache.length > 0 ? allVillagesCache : userAssignedVillages).find(v => v.name === document.getElementById('village').value.trim())?.id || ''),
             updated_at: serverTimestamp(),
             // Keep a client-side timestamp to perform our manual Last Write Wins check
             client_timestamp: Date.now()
         };
 
         const sanitizedData = deepSanitize(patientData);
+        const isOfflineSave = !navigator.onLine;
 
         try {
             if (docId) {
@@ -1286,15 +1435,32 @@ if (form) {
                         return;
                     }
                 }
-                // Fire and forget the save so UI updates immediately even if offline
-                setDoc(patientRef, sanitizedData, { merge: true })
-                    .catch(e => console.error("Background sync error:", e));
-                showMsg('Patient record updated successfully! (Syncing in background)', 'success');
+                if (isOfflineSave) {
+                    queuePendingPatient({
+                        localQueueId: `update-${docId}`,
+                        docId,
+                        data: buildQueueSafePatientData(sanitizedData, 'update'),
+                        savedAt: Date.now()
+                    });
+                    refreshPatientListFromSources();
+                    showMsg('Patient record updated locally. It will sync when internet is back.', 'success');
+                } else {
+                    await setDoc(patientRef, sanitizedData, { merge: true });
+                    showMsg('Patient record updated successfully!', 'success');
+                }
             } else {
-                // Fire and forget the save so UI updates immediately even if offline
-                addDoc(collection(db, "patients"), sanitizedData)
-                    .catch(e => console.error("Background sync error:", e));
-                showMsg('New patient added successfully! (Syncing in background)', 'success');
+                if (isOfflineSave) {
+                    queuePendingPatient({
+                        localQueueId: `create-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+                        data: buildQueueSafePatientData(sanitizedData, 'create'),
+                        savedAt: Date.now()
+                    });
+                    refreshPatientListFromSources();
+                    showMsg('New patient saved locally. It will sync when internet is back.', 'success');
+                } else {
+                    await addDoc(collection(db, "patients"), sanitizedData);
+                    showMsg('New patient added successfully!', 'success');
+                }
             }
 
             clearForm();
