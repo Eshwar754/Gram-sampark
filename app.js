@@ -67,9 +67,6 @@ let villageUnsubscribe = null;
 let usersUnsubscribe = null;
 let pendingUsersUnsubscribe = null;
 let accessRequestsUnsubscribe = null;
-let remotePatients = [];
-let remoteSchemes = [];
-let remoteBeneficiaries = [];
 
 // Enable offline persistence
 enableIndexedDbPersistence(db).catch((err) => {
@@ -124,453 +121,6 @@ const patientListEl = document.getElementById('patient-list');
 const msgEl = document.getElementById('form-msg');
 const searchInput = document.getElementById('search-input');
 const clearBtn = document.getElementById('clear-btn');
-const syncNowBtn = document.getElementById('sync-now-btn');
-const syncDetailEl = document.getElementById('sync-detail');
-const syncProgressTextEl = document.getElementById('sync-progress-text');
-const syncProgressBarEl = document.getElementById('sync-progress-bar');
-const syncHistoryEl = document.getElementById('sync-history');
-
-const SYNC_STATUS = {
-    PENDING: 'pending',
-    SYNCING: 'syncing',
-    SYNCED: 'synced',
-    FAILED: 'failed'
-};
-
-const SYNC_CONFIG = {
-    DB_NAME: 'gram-sampark-sync',
-    DB_VERSION: 1,
-    ENTITY_STORE: 'entities',
-    QUEUE_STORE: 'sync_queue',
-    HISTORY_STORE: 'sync_history',
-    MAX_HISTORY: 12,
-    BATCH_SIZE: 8,
-    MAX_RETRIES: 7,
-    BASE_RETRY_MS: 4000
-};
-
-const localEntityCache = {
-    patients: [],
-    schemes: [],
-    beneficiaries: [],
-    villages: [],
-    access_requests: []
-};
-
-const syncState = {
-    isOnline: navigator.onLine,
-    isSyncing: false,
-    pendingCount: 0,
-    failedCount: 0,
-    completedInRun: 0,
-    totalInRun: 0,
-    lastSyncedAt: null,
-    history: []
-};
-
-let syncDbPromise = null;
-let syncRefreshTimer = null;
-
-function getCurrentOwnerId() {
-    return currentUser?.uid || 'anonymous';
-}
-
-function toIsoString(timestamp = Date.now()) {
-    return new Date(timestamp).toISOString();
-}
-
-function createStableId(prefix) {
-    return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
-}
-
-function getEntityKey(collectionName, docId, ownerId = getCurrentOwnerId()) {
-    return `${ownerId}:${collectionName}:${docId}`;
-}
-
-function sanitizeForIndexedDb(value) {
-    if (Array.isArray(value)) {
-        return value.map(sanitizeForIndexedDb);
-    }
-    if (value && typeof value === 'object') {
-        const clean = {};
-        Object.entries(value).forEach(([key, nestedValue]) => {
-            if (nestedValue === undefined) {
-                clean[key] = null;
-            } else if (nestedValue && typeof nestedValue === 'object' && typeof nestedValue.toDate === 'function') {
-                clean[key] = nestedValue.toDate().toISOString();
-            } else {
-                clean[key] = sanitizeForIndexedDb(nestedValue);
-            }
-        });
-        return clean;
-    }
-    return value;
-}
-
-function normalizeRecordTimestamp(record) {
-    if (!record) return 0;
-    const timestampValue = record.client_updated_at || record.client_timestamp || record.updated_at || record.created_at;
-    if (!timestampValue) return 0;
-    if (typeof timestampValue === 'number') return timestampValue;
-    if (typeof timestampValue === 'string') {
-        const parsed = Date.parse(timestampValue);
-        return Number.isNaN(parsed) ? 0 : parsed;
-    }
-    if (timestampValue && typeof timestampValue.toDate === 'function') {
-        return timestampValue.toDate().getTime();
-    }
-    return 0;
-}
-
-function collectionSort(collectionName, records) {
-    const items = [...records];
-    if (collectionName === 'schemes' || collectionName === 'villages') {
-        items.sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
-        return items;
-    }
-    items.sort((a, b) => normalizeRecordTimestamp(b) - normalizeRecordTimestamp(a));
-    return items;
-}
-
-function openSyncDb() {
-    if (syncDbPromise) return syncDbPromise;
-    syncDbPromise = new Promise((resolve, reject) => {
-        const request = indexedDB.open(SYNC_CONFIG.DB_NAME, SYNC_CONFIG.DB_VERSION);
-        request.onupgradeneeded = (event) => {
-            const dbInstance = event.target.result;
-            if (!dbInstance.objectStoreNames.contains(SYNC_CONFIG.ENTITY_STORE)) {
-                const entityStore = dbInstance.createObjectStore(SYNC_CONFIG.ENTITY_STORE, { keyPath: 'entityKey' });
-                entityStore.createIndex('owner_collection', ['ownerId', 'collection']);
-            }
-            if (!dbInstance.objectStoreNames.contains(SYNC_CONFIG.QUEUE_STORE)) {
-                const queueStore = dbInstance.createObjectStore(SYNC_CONFIG.QUEUE_STORE, { keyPath: 'queueId' });
-                queueStore.createIndex('owner_status', ['ownerId', 'syncStatus']);
-                queueStore.createIndex('owner_collection', ['ownerId', 'collection']);
-            }
-            if (!dbInstance.objectStoreNames.contains(SYNC_CONFIG.HISTORY_STORE)) {
-                const historyStore = dbInstance.createObjectStore(SYNC_CONFIG.HISTORY_STORE, { keyPath: 'id' });
-                historyStore.createIndex('owner_timestamp', ['ownerId', 'timestamp']);
-            }
-        };
-        request.onsuccess = () => resolve(request.result);
-        request.onerror = () => reject(request.error);
-    });
-    return syncDbPromise;
-}
-
-async function withStore(storeName, mode, callback) {
-    const dbInstance = await openSyncDb();
-    return new Promise((resolve, reject) => {
-        const tx = dbInstance.transaction(storeName, mode);
-        const store = tx.objectStore(storeName);
-        let result;
-        tx.oncomplete = () => resolve(result);
-        tx.onerror = () => reject(tx.error);
-        tx.onabort = () => reject(tx.error);
-        Promise.resolve(callback(store, tx))
-            .then((value) => {
-                result = value;
-            })
-            .catch((error) => {
-                reject(error);
-                tx.abort();
-            });
-    });
-}
-
-function requestToPromise(request) {
-    return new Promise((resolve, reject) => {
-        request.onsuccess = () => resolve(request.result);
-        request.onerror = () => reject(request.error);
-    });
-}
-
-async function putEntityRecord(record) {
-    await withStore(SYNC_CONFIG.ENTITY_STORE, 'readwrite', async (store) => {
-        store.put(record);
-    });
-}
-
-async function getEntityRecord(collectionName, docId, ownerId = getCurrentOwnerId()) {
-    return withStore(SYNC_CONFIG.ENTITY_STORE, 'readonly', async (store) => requestToPromise(store.get(getEntityKey(collectionName, docId, ownerId))));
-}
-
-async function listEntityRecords(collectionName, ownerId = getCurrentOwnerId()) {
-    return withStore(SYNC_CONFIG.ENTITY_STORE, 'readonly', async (store) => {
-        const index = store.index('owner_collection');
-        return requestToPromise(index.getAll([ownerId, collectionName]));
-    });
-}
-
-async function deleteEntityRecord(collectionName, docId, ownerId = getCurrentOwnerId()) {
-    await withStore(SYNC_CONFIG.ENTITY_STORE, 'readwrite', async (store) => {
-        store.delete(getEntityKey(collectionName, docId, ownerId));
-    });
-}
-
-async function putQueueRecord(record) {
-    await withStore(SYNC_CONFIG.QUEUE_STORE, 'readwrite', async (store) => {
-        store.put(record);
-    });
-}
-
-async function getQueueRecord(collectionName, docId, ownerId = getCurrentOwnerId()) {
-    const queueId = `${ownerId}:${collectionName}:${docId}`;
-    return withStore(SYNC_CONFIG.QUEUE_STORE, 'readonly', async (store) => requestToPromise(store.get(queueId)));
-}
-
-async function listQueueRecords(ownerId = getCurrentOwnerId()) {
-    return withStore(SYNC_CONFIG.QUEUE_STORE, 'readonly', async (store) => {
-        const allItems = await requestToPromise(store.getAll());
-        return allItems.filter(item => item.ownerId === ownerId);
-    });
-}
-
-async function deleteQueueRecord(collectionName, docId, ownerId = getCurrentOwnerId()) {
-    const queueId = `${ownerId}:${collectionName}:${docId}`;
-    await withStore(SYNC_CONFIG.QUEUE_STORE, 'readwrite', async (store) => {
-        store.delete(queueId);
-    });
-}
-
-async function addSyncHistoryEntry(entry) {
-    const historyEntry = {
-        id: `${getCurrentOwnerId()}:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`,
-        ownerId: getCurrentOwnerId(),
-        timestamp: Date.now(),
-        ...entry
-    };
-
-    await withStore(SYNC_CONFIG.HISTORY_STORE, 'readwrite', async (store) => {
-        store.put(historyEntry);
-        const allHistory = await requestToPromise(store.getAll());
-        const currentOwnerHistory = allHistory
-            .filter(item => item.ownerId === historyEntry.ownerId)
-            .sort((a, b) => b.timestamp - a.timestamp);
-        currentOwnerHistory.slice(SYNC_CONFIG.MAX_HISTORY).forEach(item => store.delete(item.id));
-    });
-}
-
-async function readSyncHistory(ownerId = getCurrentOwnerId()) {
-    const history = await withStore(SYNC_CONFIG.HISTORY_STORE, 'readonly', async (store) => {
-        const allEntries = await requestToPromise(store.getAll());
-        return allEntries
-            .filter(item => item.ownerId === ownerId)
-            .sort((a, b) => b.timestamp - a.timestamp)
-            .slice(0, SYNC_CONFIG.MAX_HISTORY);
-    });
-    syncState.history = history;
-    renderSyncHistory();
-}
-
-function getRetryDelayMs(retryCount) {
-    const exponential = SYNC_CONFIG.BASE_RETRY_MS * (2 ** Math.max(0, retryCount - 1));
-    return Math.min(exponential, 120000);
-}
-
-async function refreshLocalCache(collectionName) {
-    if (!Object.prototype.hasOwnProperty.call(localEntityCache, collectionName)) return;
-    const records = await listEntityRecords(collectionName);
-    localEntityCache[collectionName] = records.map(record => ({
-        id: record.docId,
-        ...record.data,
-        _local: true,
-        _syncStatus: record.syncStatus,
-        _retryCount: record.retryCount || 0,
-        _deleted: Boolean(record.deleted),
-        _localUpdatedAt: record.updatedAt
-    }));
-}
-
-function mergeRemoteAndLocalRecords(collectionName, remoteRecords) {
-    const merged = new Map();
-    remoteRecords.forEach(record => merged.set(record.id, { ...record, _origin: record.source || 'server' }));
-
-    (localEntityCache[collectionName] || []).forEach(record => {
-        if (record._deleted) {
-            merged.delete(record.id);
-            return;
-        }
-        const existing = merged.get(record.id);
-        if (!existing || normalizeRecordTimestamp(record) >= normalizeRecordTimestamp(existing) || record._syncStatus !== SYNC_STATUS.SYNCED) {
-            merged.set(record.id, {
-                ...existing,
-                ...record,
-                id: record.id,
-                source: record._syncStatus === SYNC_STATUS.SYNCED ? 'Server' : 'Local',
-                sync_status: record._syncStatus
-            });
-        }
-    });
-
-    return collectionSort(collectionName, Array.from(merged.values()));
-}
-
-async function updateSyncMetrics() {
-    const queueItems = await listQueueRecords();
-    syncState.pendingCount = queueItems.filter(item => item.syncStatus === SYNC_STATUS.PENDING || item.syncStatus === SYNC_STATUS.SYNCING).length;
-    syncState.failedCount = queueItems.filter(item => item.syncStatus === SYNC_STATUS.FAILED).length;
-    renderSyncStatus();
-}
-
-function renderSyncHistory() {
-    if (!syncHistoryEl) return;
-    if (!syncState.history.length) {
-        syncHistoryEl.innerHTML = '<div class="sync-history-empty">No sync activity yet.</div>';
-        return;
-    }
-
-    syncHistoryEl.innerHTML = syncState.history.map(entry => {
-        const stateClass = entry.state || 'pending';
-        return `
-            <div class="sync-history-item ${stateClass}">
-                <strong>${escapeHTML(entry.title || 'Sync event')}</strong><br>
-                <span>${escapeHTML(entry.message || '')}</span><br>
-                <small>${new Date(entry.timestamp).toLocaleString()}</small>
-            </div>
-        `;
-    }).join('');
-}
-
-function renderSyncStatus() {
-    if (!statusIndicator) return;
-
-    let indicatorText = 'All Data Synced';
-    let indicatorClass = 'status online';
-    let detailText = 'All pending local records are synced to the server.';
-
-    if (!syncState.isOnline) {
-        indicatorText = 'Offline Mode';
-        indicatorClass = 'status offline';
-        detailText = syncState.pendingCount > 0
-            ? `${syncState.pendingCount} record(s) saved locally and waiting for internet.`
-            : 'You are offline. New data will be saved locally on this device.';
-    } else if (syncState.isSyncing) {
-        indicatorText = 'Syncing...';
-        indicatorClass = 'status syncing';
-        detailText = `Syncing ${syncState.completedInRun} of ${syncState.totalInRun || syncState.pendingCount || 1} queued record(s) in the background.`;
-    } else if (syncState.failedCount > 0) {
-        indicatorText = 'Sync Retry Pending';
-        indicatorClass = 'status failed';
-        detailText = `${syncState.failedCount} record(s) failed and will retry automatically when conditions improve.`;
-    } else if (syncState.pendingCount > 0) {
-        indicatorText = 'Data Saved Locally';
-        indicatorClass = 'status offline';
-        detailText = `${syncState.pendingCount} record(s) are queued locally and ready to sync.`;
-    }
-
-    statusIndicator.textContent = indicatorText;
-    statusIndicator.className = indicatorClass;
-
-    if (syncDetailEl) syncDetailEl.textContent = detailText;
-    if (syncProgressTextEl) syncProgressTextEl.textContent = `${syncState.pendingCount} pending • ${syncState.failedCount} failed`;
-
-    if (syncProgressBarEl) {
-        const total = syncState.totalInRun || Math.max(syncState.pendingCount, 1);
-        const progress = syncState.isSyncing ? Math.min(100, Math.round((syncState.completedInRun / total) * 100)) : (syncState.pendingCount === 0 ? 100 : 0);
-        syncProgressBarEl.style.width = `${progress}%`;
-    }
-
-    if (syncNowBtn) {
-        syncNowBtn.disabled = !syncState.isOnline || syncState.isSyncing || (syncState.pendingCount === 0 && syncState.failedCount === 0);
-    }
-}
-
-async function hydrateLocalCollections() {
-    await Promise.all([
-        refreshLocalCache('patients'),
-        refreshLocalCache('schemes'),
-        refreshLocalCache('beneficiaries'),
-        refreshLocalCache('villages'),
-        refreshLocalCache('access_requests')
-    ]);
-    await updateSyncMetrics();
-    await readSyncHistory();
-}
-
-function refreshPatientsView() {
-    allPatients = mergeRemoteAndLocalRecords('patients', remotePatients);
-    renderPatients(allPatients);
-    if (userRole !== 'admin') {
-        updateUserDashboardStats();
-    }
-}
-
-function refreshSchemesView() {
-    allSchemes = mergeRemoteAndLocalRecords('schemes', remoteSchemes);
-    const schemesList = document.getElementById('schemes-list');
-    const schemeSelect = document.getElementById('ben-scheme-id');
-    const filterSchemeSelect = document.getElementById('filter-scheme-select');
-
-    if (!schemesList || !schemeSelect) return;
-
-    schemesList.innerHTML = '';
-    schemeSelect.innerHTML = '<option value="">Choose Scheme...</option>';
-    if (filterSchemeSelect) filterSchemeSelect.innerHTML = '<option value="">All Schemes</option>';
-
-    allSchemes.forEach((data) => {
-        const id = data.id;
-        const card = document.createElement('div');
-        card.className = 'stat-card';
-        const syncLabel = data.sync_status && data.sync_status !== SYNC_STATUS.SYNCED
-            ? `<div class="secondary-text" style="margin-top:8px;">${escapeHTML(data.sync_status.toUpperCase())}</div>`
-            : '';
-        card.innerHTML = `
-            <h3>${escapeHTML(data.name)}</h3>
-            <p style="font-size:0.85rem; color:#888; margin-bottom:10px;">${escapeHTML(data.description)}</p>
-            <div style="font-size:0.75rem; color:#aaa;">Eligibility: ${escapeHTML(data.eligibility)}</div>
-            ${syncLabel}
-            ${userRole === 'admin' ? `
-                <div style="margin-top:10px;">
-                    <button class="icon-btn" onclick="editScheme('${id}')">Edit</button>
-                    <button class="icon-btn delete" onclick="deleteScheme('${id}')">Delete</button>
-                </div>
-            ` : ''}
-        `;
-        schemesList.appendChild(card);
-
-        const opt = document.createElement('option');
-        opt.value = id;
-        opt.textContent = data.name;
-        schemeSelect.appendChild(opt);
-        if (filterSchemeSelect) filterSchemeSelect.appendChild(opt.cloneNode(true));
-    });
-}
-
-function refreshBeneficiariesView() {
-    allBeneficiaries = mergeRemoteAndLocalRecords('beneficiaries', remoteBeneficiaries);
-    const listEl = document.getElementById('beneficiaries-list');
-    if (!listEl) return;
-    listEl.innerHTML = '';
-
-    allBeneficiaries.forEach((data) => {
-        const id = data.id;
-        const schemeName = allSchemes.find(s => s.id === data.schemeId)?.name || 'Unknown Scheme';
-        const div = document.createElement('div');
-        div.className = 'list-row';
-        const syncBadge = data.sync_status && data.sync_status !== SYNC_STATUS.SYNCED
-            ? `<span class="badge badge-warning">${escapeHTML(data.sync_status)}</span>`
-            : '';
-        div.innerHTML = `
-            <div class="col-name">
-                <div class="primary-text">${escapeHTML(data.citizenName)}</div>
-                <div class="secondary-text">Registered by: ${escapeHTML(data.assignedSurveyorEmail || 'Admin')}</div>
-            </div>
-            <div class="col-info">
-                <div class="primary-text">${escapeHTML(schemeName)}</div>
-            </div>
-            <div class="col-location">
-                <span class="badge ${data.status === 'Approved' ? 'badge-success' : 'badge-warning'}">${data.status}</span>
-                ${syncBadge}
-            </div>
-            <div class="col-actions">
-                <button class="icon-btn" onclick="editBeneficiary('${id}')">Edit</button>
-                ${userRole === 'admin' ? `<button class="icon-btn delete" onclick="deleteBeneficiary('${id}')">Delete</button>` : ''}
-            </div>
-        `;
-        listEl.appendChild(div);
-    });
-}
 
 // Multi-step Form Logic
 let currentStep = 1;
@@ -767,296 +317,19 @@ function getFamilyData() {
 // Keep track of all fetched patients for searching
 let allPatients = [];
 
-function buildLocalEntityRecord({ collectionName, docId, data, syncStatus, retryCount = 0, deleted = false, ownerId = getCurrentOwnerId() }) {
-    return {
-        entityKey: getEntityKey(collectionName, docId, ownerId),
-        ownerId,
-        collection: collectionName,
-        docId,
-        data: sanitizeForIndexedDb(data),
-        syncStatus,
-        retryCount,
-        deleted,
-        updatedAt: Date.now()
-    };
-}
-
-async function saveLocalMutation({ collectionName, docId, data, operation = 'upsert', syncStatus = SYNC_STATUS.PENDING, ownerId = getCurrentOwnerId() }) {
-    const now = Date.now();
-    const existingQueue = await getQueueRecord(collectionName, docId, ownerId);
-    const queueId = `${ownerId}:${collectionName}:${docId}`;
-    const entityRecord = buildLocalEntityRecord({
-        collectionName,
-        docId,
-        data,
-        syncStatus,
-        retryCount: existingQueue?.retryCount || 0,
-        deleted: operation === 'delete',
-        ownerId
-    });
-
-    await putEntityRecord(entityRecord);
-    await putQueueRecord({
-        queueId,
-        ownerId,
-        collection: collectionName,
-        docId,
-        operation,
-        payload: sanitizeForIndexedDb(data),
-        syncStatus,
-        retryCount: existingQueue?.retryCount || 0,
-        createdAt: existingQueue?.createdAt || now,
-        updatedAt: now,
-        nextRetryAt: now,
-        lastError: ''
-    });
-
-    await refreshLocalCache(collectionName);
-    await updateSyncMetrics();
-}
-
-async function markQueueItemState(item, syncStatus, extra = {}) {
-    await putQueueRecord({
-        ...item,
-        syncStatus,
-        ...extra
-    });
-    const entity = await getEntityRecord(item.collection, item.docId, item.ownerId);
-    if (entity) {
-        await putEntityRecord({
-            ...entity,
-            syncStatus,
-            retryCount: extra.retryCount ?? item.retryCount ?? 0,
-            updatedAt: Date.now(),
-            deleted: syncStatus === SYNC_STATUS.SYNCED && item.operation === 'delete' ? true : entity.deleted
-        });
-    }
-    await refreshLocalCache(item.collection);
-    if (item.collection === 'patients') refreshPatientsView();
-    if (item.collection === 'schemes') refreshSchemesView();
-    if (item.collection === 'beneficiaries') refreshBeneficiariesView();
-}
-
-async function finalizeSyncedItem(item, serverPayload) {
-    if (item.operation === 'delete') {
-        await deleteQueueRecord(item.collection, item.docId, item.ownerId);
-        await deleteEntityRecord(item.collection, item.docId, item.ownerId);
-    } else {
-        await deleteQueueRecord(item.collection, item.docId, item.ownerId);
-        await putEntityRecord(buildLocalEntityRecord({
-            collectionName: item.collection,
-            docId: item.docId,
-            data: serverPayload,
-            syncStatus: SYNC_STATUS.SYNCED,
-            ownerId: item.ownerId
-        }));
-    }
-
-    await refreshLocalCache(item.collection);
-    if (item.collection === 'patients') refreshPatientsView();
-    if (item.collection === 'schemes') refreshSchemesView();
-    if (item.collection === 'beneficiaries') refreshBeneficiariesView();
-    await addSyncHistoryEntry({
-        state: 'success',
-        title: `${item.collection} synced`,
-        message: `${item.docId} uploaded successfully.`
-    });
-}
-
-function buildServerPayload(localPayload, docId, serverData = null) {
-    const payload = deepSanitize({ ...localPayload });
-    delete payload.id;
-    delete payload.sync_status;
-    delete payload._local;
-    delete payload._syncStatus;
-    delete payload._retryCount;
-    delete payload._deleted;
-    delete payload._origin;
-    payload.sync_local_id = docId;
-    payload.client_updated_at = localPayload.client_updated_at || localPayload.client_timestamp || Date.now();
-    payload.client_timestamp = payload.client_updated_at;
-    payload.updated_at = serverTimestamp();
-    if (!payload.created_at && !serverData?.created_at) {
-        payload.created_at = serverTimestamp();
-    }
-    return payload;
-}
-
-async function resolveConflictAndSync(item) {
-    const docRef = doc(db, item.collection, item.docId);
-
-    if (item.operation === 'delete') {
-        await deleteDoc(docRef);
-        return { outcome: 'deleted' };
-    }
-
-    const localPayload = item.payload || {};
-    const serverSnapshot = await getDoc(docRef);
-    const serverData = serverSnapshot.exists() ? serverSnapshot.data() : null;
-    const localTimestamp = normalizeRecordTimestamp(localPayload);
-    const serverTimestampValue = normalizeRecordTimestamp(serverData);
-
-    if (serverData && serverTimestampValue > localTimestamp) {
-        await putEntityRecord(buildLocalEntityRecord({
-            collectionName: item.collection,
-            docId: item.docId,
-            data: { ...serverData, id: item.docId },
-            syncStatus: SYNC_STATUS.SYNCED,
-            ownerId: item.ownerId
-        }));
-        await deleteQueueRecord(item.collection, item.docId, item.ownerId);
-        await refreshLocalCache(item.collection);
-        await addSyncHistoryEntry({
-            state: 'pending',
-            title: `Conflict resolved for ${item.collection}`,
-            message: `${item.docId} kept the newer server version.`
-        });
-        return { outcome: 'skipped', serverData };
-    }
-
-    const payload = buildServerPayload(localPayload, item.docId, serverData);
-    await setDoc(docRef, payload, { merge: true });
-    return { outcome: 'uploaded', payload: { ...localPayload, sync_local_id: item.docId } };
-}
-
-async function processSyncQueue(trigger = 'auto') {
-    if (syncState.isSyncing || !navigator.onLine || !currentUser) {
-        syncState.isOnline = navigator.onLine;
-        renderSyncStatus();
-        return;
-    }
-
-    const queueItems = (await listQueueRecords())
-        .filter(item => item.syncStatus === SYNC_STATUS.PENDING || item.syncStatus === SYNC_STATUS.FAILED)
-        .filter(item => !item.nextRetryAt || item.nextRetryAt <= Date.now())
-        .sort((a, b) => a.updatedAt - b.updatedAt)
-        .slice(0, SYNC_CONFIG.BATCH_SIZE);
-
-    if (!queueItems.length) {
-        syncState.isSyncing = false;
-        syncState.completedInRun = 0;
-        syncState.totalInRun = 0;
-        syncState.lastSyncedAt = Date.now();
-        renderSyncStatus();
-        return;
-    }
-
-    syncState.isSyncing = true;
-    syncState.totalInRun = queueItems.length;
-    syncState.completedInRun = 0;
-    renderSyncStatus();
-
-    for (const item of queueItems) {
-        try {
-            await markQueueItemState(item, SYNC_STATUS.SYNCING, { lastAttemptAt: Date.now() });
-            const result = await resolveConflictAndSync(item);
-
-            if (result.outcome === 'uploaded') {
-                await finalizeSyncedItem(item, result.payload);
-            }
-            syncState.completedInRun += 1;
-            await updateSyncMetrics();
-        } catch (error) {
-            console.error('Sync failure:', error);
-            const retryCount = (item.retryCount || 0) + 1;
-            const nextRetryAt = Date.now() + getRetryDelayMs(retryCount);
-            await markQueueItemState(item, SYNC_STATUS.FAILED, {
-                retryCount,
-                lastError: error.message || 'Unknown sync error',
-                updatedAt: Date.now(),
-                nextRetryAt
-            });
-            await refreshLocalCache(item.collection);
-            await addSyncHistoryEntry({
-                state: 'failed',
-                title: `${item.collection} sync failed`,
-                message: `${item.docId}: ${error.message || 'Unknown sync error'}`
-            });
-            syncState.completedInRun += 1;
-            await updateSyncMetrics();
-        }
-    }
-
-    syncState.isSyncing = false;
-    syncState.lastSyncedAt = Date.now();
-    renderSyncStatus();
-    await readSyncHistory();
-    await updateSyncMetrics();
-
-    const remaining = (await listQueueRecords()).filter(item => item.syncStatus === SYNC_STATUS.PENDING || item.syncStatus === SYNC_STATUS.FAILED);
-    if (remaining.length && navigator.onLine) {
-        clearTimeout(syncRefreshTimer);
-        syncRefreshTimer = setTimeout(() => processSyncQueue('continue'), 1200);
-    } else if (trigger !== 'manual' && remaining.length === 0) {
-        await addSyncHistoryEntry({
-            state: 'success',
-            title: 'All Data Synced',
-            message: 'All pending local records are safely synced.'
-        });
-        await readSyncHistory();
-    }
-}
-
-async function queueMutation({ collectionName, docId, data, operation = 'upsert', successMessage, pendingMessage }) {
-    await saveLocalMutation({ collectionName, docId, data, operation });
-    if (collectionName === 'patients') refreshPatientsView();
-    if (collectionName === 'schemes') refreshSchemesView();
-    if (collectionName === 'beneficiaries') refreshBeneficiariesView();
-
-    if (!navigator.onLine) {
-        showMsg(pendingMessage || 'Data Saved Locally', 'success');
-        await addSyncHistoryEntry({
-            state: 'pending',
-            title: 'Data Saved Locally',
-            message: `${collectionName}/${docId} queued for sync when internet returns.`
-        });
-        await readSyncHistory();
-        renderSyncStatus();
-        return;
-    }
-
-    showMsg(successMessage || 'Syncing...', 'success');
-    processSyncQueue('foreground').catch(error => console.error('Queue processing error:', error));
-}
-
-async function queueDeleteMutation({ collectionName, docId, successMessage }) {
-    const existingEntity = await getEntityRecord(collectionName, docId);
-    const payload = existingEntity?.data || { id: docId, client_updated_at: Date.now() };
-    await queueMutation({
-        collectionName,
-        docId,
-        data: payload,
-        operation: 'delete',
-        successMessage,
-        pendingMessage: 'Data Saved Locally'
-    });
-}
-
+// Monitor Network Status
 function updateOnlineStatus() {
-    syncState.isOnline = navigator.onLine;
-    renderSyncStatus();
     if (navigator.onLine) {
-        processSyncQueue('online').catch(error => console.error('Online sync error:', error));
+        statusIndicator.textContent = 'Online & Syncing';
+        statusIndicator.className = 'status online';
+    } else {
+        statusIndicator.textContent = 'Offline (Changes will save locally)';
+        statusIndicator.className = 'status offline';
     }
 }
-
 window.addEventListener('online', updateOnlineStatus);
 window.addEventListener('offline', updateOnlineStatus);
-if (syncNowBtn) {
-    syncNowBtn.addEventListener('click', () => {
-        processSyncQueue('manual').catch(error => console.error('Manual sync error:', error));
-    });
-}
-hydrateLocalCollections()
-    .catch(error => console.error('Local cache bootstrap failed:', error))
-    .finally(() => updateOnlineStatus());
-
-if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-        navigator.serviceWorker.register('./sw.js')
-            .catch(error => console.error('Service worker registration failed:', error));
-    });
-}
+updateOnlineStatus();
 
 // Auth Logic
 let isLoginMode = true;
@@ -1145,7 +418,6 @@ if (logoutBtn) {
 onAuthStateChanged(auth, async (user) => {
     if (user) {
         currentUser = user;
-        await hydrateLocalCollections();
         if (userInfo) userInfo.textContent = user.email;
         if (logoutBtn) logoutBtn.style.display = 'inline-block';
         if (loginSection) loginSection.style.display = 'none';
@@ -1238,20 +510,8 @@ onAuthStateChanged(auth, async (user) => {
             }
         }
 
-        processSyncQueue('auth').catch(error => console.error('Post-login sync error:', error));
-
     } else {
         currentUser = null;
-        syncState.isSyncing = false;
-        remotePatients = [];
-        remoteSchemes = [];
-        remoteBeneficiaries = [];
-        Object.keys(localEntityCache).forEach((key) => {
-            localEntityCache[key] = [];
-        });
-        await updateSyncMetrics();
-        await readSyncHistory('anonymous');
-        renderSyncStatus();
         userRole = 'user';
         userStatus = 'pending';
         userAssignedVillages = [];
@@ -1328,13 +588,17 @@ function setupPatientListener() {
     }
 
     patientUnsubscribe = onSnapshot(q, { includeMetadataChanges: true }, (snapshot) => {
-        remotePatients = [];
+        allPatients = [];
         snapshot.forEach((docSnap) => {
             const data = docSnap.data();
             const source = docSnap.metadata.hasPendingWrites ? "Local" : "Server";
-            remotePatients.push({ id: docSnap.id, source, ...data });
+            allPatients.push({ id: docSnap.id, source, ...data });
         });
-        refreshPatientsView();
+        renderPatients(allPatients);
+
+        if (userRole !== 'admin') {
+            updateUserDashboardStats();
+        }
     }, (error) => {
         console.error("Patient list error:", error);
         // Note: You may need to create a composite index in Firebase Console 
@@ -1839,20 +1103,16 @@ function renderPatients(patients) {
     patients.forEach(p => {
         const div = document.createElement('div');
         div.className = 'list-row';
-        const dateStr = normalizeRecordTimestamp(p) ? new Date(normalizeRecordTimestamp(p)).toLocaleDateString() : 'Pending';
-        const syncBadge = p.sync_status && p.sync_status !== SYNC_STATUS.SYNCED
-            ? `<span class="source-tag" style="margin-top:6px;">${escapeHTML(String(p.sync_status).toUpperCase())}</span>`
-            : '';
+        const dateStr = p.updated_at ? new Date(p.client_timestamp || p.updated_at.toDate()).toLocaleDateString() : 'Pending';
 
         div.innerHTML = `
             <div class="col-name">
                 <div class="primary-text">${escapeHTML(p.name)}</div>
                 <div class="secondary-text">${p.mobile ? escapeHTML(p.mobile) : 'No Mobile'}</div>
-                ${syncBadge}
             </div>
             <div class="col-info">
                 <div class="primary-text">${escapeHTML(p.gender)}</div>
-                <div class="secondary-text">DOB: ${escapeHTML(p.dob)} | Updated: ${escapeHTML(dateStr)}</div>
+                <div class="secondary-text">DOB: ${escapeHTML(p.dob)}</div>
             </div>
             <div class="col-location">
                 <div class="primary-text">${escapeHTML(p.village)}</div>
@@ -1910,19 +1170,10 @@ function renderPatients(patients) {
                     <line x1="14" y1="11" x2="14" y2="17"></line>
                 </svg>
             `;
-            delBtn.onclick = async (e) => {
+            delBtn.onclick = (e) => {
                 e.stopPropagation();
                 if (confirm(`Delete ${p.name}?`)) {
-                    try {
-                        await queueDeleteMutation({
-                            collectionName: 'patients',
-                            docId: p.id,
-                            successMessage: navigator.onLine ? 'Syncing patient deletion...' : 'Data Saved Locally'
-                        });
-                        applyPatientFilters();
-                    } catch (error) {
-                        showMsg(error.message, 'error');
-                    }
+                    deleteDoc(doc(db, "patients", p.id)).then(() => applyPatientFilters());
                 }
             };
             actionContainer.appendChild(delBtn);
@@ -1967,12 +1218,8 @@ if (form) {
             }
         }
 
-        const existingDocId = document.getElementById('docId').value;
-        const docId = existingDocId || createStableId('patient');
-        const existingPatient = allPatients.find(patient => patient.id === existingDocId);
-        const now = Date.now();
+        const docId = document.getElementById('docId').value;
         const patientData = {
-            id: docId,
             name: document.getElementById('name').value.trim(),
             mobile: document.getElementById('mobile').value.trim(),
             email: document.getElementById('patient_email').value.trim(),
@@ -2021,22 +1268,34 @@ if (form) {
 
             assigned_by_email: currentUser.email, // Assign to current user
             village_id: activeVillage ? String(activeVillage.id) : (allVillagesCache.find(v => v.name === document.getElementById('village').value.trim())?.id || ''),
-            sync_local_id: docId,
-            client_created_at: existingPatient?.client_created_at || existingPatient?.client_timestamp || now,
-            client_updated_at: now,
-            client_timestamp: now
+            updated_at: serverTimestamp(),
+            // Keep a client-side timestamp to perform our manual Last Write Wins check
+            client_timestamp: Date.now()
         };
 
         const sanitizedData = deepSanitize(patientData);
 
         try {
-            await queueMutation({
-                collectionName: 'patients',
-                docId,
-                data: sanitizedData,
-                successMessage: existingDocId ? 'Syncing patient update...' : 'Syncing patient record...',
-                pendingMessage: 'Data Saved Locally'
-            });
+            if (docId) {
+                const patientRef = doc(db, "patients", docId);
+                const existingDoc = await getDoc(patientRef);
+                if (existingDoc.exists()) {
+                    const existingData = existingDoc.data();
+                    if (existingData.client_timestamp && existingData.client_timestamp > patientData.client_timestamp) {
+                        showMsg('Cannot update: Server has a newer version of this record.', 'error');
+                        return;
+                    }
+                }
+                // Fire and forget the save so UI updates immediately even if offline
+                setDoc(patientRef, sanitizedData, { merge: true })
+                    .catch(e => console.error("Background sync error:", e));
+                showMsg('Patient record updated successfully! (Syncing in background)', 'success');
+            } else {
+                // Fire and forget the save so UI updates immediately even if offline
+                addDoc(collection(db, "patients"), sanitizedData)
+                    .catch(e => console.error("Background sync error:", e));
+                showMsg('New patient added successfully! (Syncing in background)', 'success');
+            }
 
             clearForm();
 
@@ -2498,13 +1757,46 @@ function editPatient(p) {
     function setupSchemesListener() {
         const q = query(collection(db, 'schemes'), orderBy('name'));
         onSnapshot(q, (snapshot) => {
-            remoteSchemes = [];
+            allSchemes = [];
+            const schemesList = document.getElementById('schemes-list');
+            const schemeSelect = document.getElementById('ben-scheme-id');
+            const filterSchemeSelect = document.getElementById('filter-scheme-select');
+
+            schemesList.innerHTML = '';
+            schemeSelect.innerHTML = '<option value="">Choose Scheme...</option>';
+            if (filterSchemeSelect) filterSchemeSelect.innerHTML = '<option value="">All Schemes</option>';
+
             snapshot.forEach(docSnap => {
                 const data = docSnap.data();
                 const id = docSnap.id;
-                remoteSchemes.push({ id, ...data });
+                allSchemes.push({ id, ...data });
+
+                // Render in dashboard
+                const card = document.createElement('div');
+                card.className = 'stat-card';
+                card.innerHTML = `
+                <h3>${escapeHTML(data.name)}</h3>
+                <p style="font-size:0.85rem; color:#888; margin-bottom:10px;">${escapeHTML(data.description)}</p>
+                <div style="font-size:0.75rem; color:#aaa;">Eligibility: ${escapeHTML(data.eligibility)}</div>
+                ${userRole === 'admin' ? `
+                    <div style="margin-top:10px;">
+                        <button class="icon-btn" onclick="editScheme('${id}')">Edit</button>
+                        <button class="icon-btn delete" onclick="deleteScheme('${id}')">Delete</button>
+                    </div>
+                ` : ''}
+            `;
+                schemesList.appendChild(card);
+
+                // Add to dropdowns
+                const opt = document.createElement('option');
+                opt.value = id;
+                opt.textContent = data.name;
+                schemeSelect.appendChild(opt);
+                if (filterSchemeSelect) {
+                    const fOpt = opt.cloneNode(true);
+                    filterSchemeSelect.appendChild(fOpt);
+                }
             });
-            refreshSchemesView();
         });
     }
 
@@ -2538,12 +1830,8 @@ function editPatient(p) {
     window.deleteScheme = async function (id) {
         if (!confirm('Are you sure you want to delete this scheme?')) return;
         try {
-            await queueDeleteMutation({
-                collectionName: 'schemes',
-                docId: id,
-                successMessage: navigator.onLine ? 'Syncing scheme deletion...' : 'Data Saved Locally'
-            });
-            refreshSchemesView();
+            await deleteDoc(doc(db, 'schemes', id));
+            showMsg('Scheme deleted', 'success');
         } catch (e) {
             showMsg(e.message, 'error');
         }
@@ -2551,29 +1839,21 @@ function editPatient(p) {
 
     document.getElementById('scheme-form').addEventListener('submit', async (e) => {
         e.preventDefault();
-        const existingId = document.getElementById('scheme-id').value;
-        const id = existingId || createStableId('scheme');
-        const existingScheme = allSchemes.find(scheme => scheme.id === existingId);
-        const now = Date.now();
+        const id = document.getElementById('scheme-id').value;
         const data = {
-            id,
             name: document.getElementById('scheme-name').value,
             description: document.getElementById('scheme-desc').value,
             eligibility: document.getElementById('scheme-eligibility').value,
-            sync_local_id: id,
-            client_created_at: existingScheme?.client_created_at || existingScheme?.client_timestamp || now,
-            client_updated_at: now,
-            client_timestamp: now
+            updated_at: serverTimestamp()
         };
         try {
-            await queueMutation({
-                collectionName: 'schemes',
-                docId: id,
-                data,
-                successMessage: existingId ? 'Syncing scheme update...' : 'Syncing new scheme...',
-                pendingMessage: 'Data Saved Locally'
-            });
+            if (id) {
+                await setDoc(doc(db, 'schemes', id), data, { merge: true });
+            } else {
+                await addDoc(collection(db, 'schemes'), { ...data, created_at: serverTimestamp() });
+            }
             closeModal();
+            showMsg('Scheme saved successfully!', 'success');
         } catch (e) {
             showMsg(e.message, 'error');
         }
@@ -2590,13 +1870,36 @@ function editPatient(p) {
         }
 
         onSnapshot(q, (snapshot) => {
-            remoteBeneficiaries = [];
+            allBeneficiaries = [];
+            const listEl = document.getElementById('beneficiaries-list');
+            listEl.innerHTML = '';
+
             snapshot.forEach(docSnap => {
                 const data = docSnap.data();
                 const id = docSnap.id;
-                remoteBeneficiaries.push({ id, ...data });
+                allBeneficiaries.push({ id, ...data });
+
+                const schemeName = allSchemes.find(s => s.id === data.schemeId)?.name || 'Unknown Scheme';
+                const div = document.createElement('div');
+                div.className = 'list-row';
+                div.innerHTML = `
+                <div class="col-name">
+                    <div class="primary-text">${escapeHTML(data.citizenName)}</div>
+                    <div class="secondary-text">Registered by: ${escapeHTML(data.assignedSurveyorEmail || 'Admin')}</div>
+                </div>
+                <div class="col-info">
+                    <div class="primary-text">${escapeHTML(schemeName)}</div>
+                </div>
+                <div class="col-location">
+                    <span class="badge ${data.status === 'Approved' ? 'badge-success' : 'badge-warning'}">${data.status}</span>
+                </div>
+                <div class="col-actions">
+                    <button class="icon-btn" onclick="editBeneficiary('${id}')">Edit</button>
+                    ${userRole === 'admin' ? `<button class="icon-btn delete" onclick="deleteBeneficiary('${id}')">Delete</button>` : ''}
+                </div>
+            `;
+                listEl.appendChild(div);
             });
-            refreshBeneficiariesView();
         });
     }
 
@@ -2645,12 +1948,8 @@ function editPatient(p) {
     window.deleteBeneficiary = async function (id) {
         if (!confirm('Remove this beneficiary application?')) return;
         try {
-            await queueDeleteMutation({
-                collectionName: 'beneficiaries',
-                docId: id,
-                successMessage: navigator.onLine ? 'Syncing beneficiary deletion...' : 'Data Saved Locally'
-            });
-            refreshBeneficiariesView();
+            await deleteDoc(doc(db, 'beneficiaries', id));
+            showMsg('Beneficiary removed', 'success');
         } catch (e) {
             showMsg(e.message, 'error');
         }
@@ -2658,16 +1957,12 @@ function editPatient(p) {
 
     document.getElementById('beneficiary-form').addEventListener('submit', async (e) => {
         e.preventDefault();
-        const existingId = document.getElementById('beneficiary-id').value;
-        const id = existingId || createStableId('beneficiary');
-        const existingBeneficiary = allBeneficiaries.find(beneficiary => beneficiary.id === existingId);
-        const now = Date.now();
+        const id = document.getElementById('beneficiary-id').value;
         const citizenSelect = document.getElementById('ben-citizen-id');
         const selectedOption = citizenSelect.options[citizenSelect.selectedIndex];
         const citizenName = selectedOption ? selectedOption.text.split(' (')[0] : '';
 
         const data = {
-            id,
             citizenId: citizenSelect.value,
             citizenName: citizenName,
             schemeId: document.getElementById('ben-scheme-id').value,
@@ -2675,20 +1970,16 @@ function editPatient(p) {
             notes: document.getElementById('ben-notes').value,
             assignedSurveyorId: currentUser.uid,
             assignedSurveyorEmail: currentUser.email,
-            sync_local_id: id,
-            client_created_at: existingBeneficiary?.client_created_at || existingBeneficiary?.client_timestamp || now,
-            client_updated_at: now,
-            client_timestamp: now
+            updated_at: serverTimestamp()
         };
         try {
-            await queueMutation({
-                collectionName: 'beneficiaries',
-                docId: id,
-                data,
-                successMessage: existingId ? 'Syncing beneficiary update...' : 'Syncing beneficiary registration...',
-                pendingMessage: 'Data Saved Locally'
-            });
+            if (id) {
+                await setDoc(doc(db, 'beneficiaries', id), data, { merge: true });
+            } else {
+                await addDoc(collection(db, 'beneficiaries'), { ...data, created_at: serverTimestamp() });
+            }
             closeModal();
+            showMsg('Beneficiary application saved!', 'success');
         } catch (e) {
             showMsg(e.message, 'error');
         }
@@ -2725,5 +2016,5 @@ function editPatient(p) {
             cursorGlow.style.transform = `translate3d(${glowX - (cursorGlow.offsetWidth / 2)}px, ${glowY - (cursorGlow.offsetHeight / 2)}px, 0)`;
         }
         requestAnimationFrame(animateGlow);
-    }
     animateGlow();
+}
