@@ -1,4 +1,4 @@
-const CACHE_NAME = 'gram-sampark-v2';
+const CACHE_NAME = 'gram-sampark-v1';
 const ASSETS = [
   '/',
   '/index.html',
