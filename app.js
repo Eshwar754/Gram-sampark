@@ -1160,8 +1160,8 @@ function renderPatients(patients) {
         pdfBtn.onclick = (e) => { e.stopPropagation(); if (window.generatePDF) window.generatePDF(p); };
         actionContainer.appendChild(pdfBtn);
 
-        // Delete Button with Icon - Only for Admins as per rules
-        if (userRole === 'admin') {
+        // Delete Button with Icon - For Admins and Surveyors
+        if (userRole === 'admin' || userRole === 'surveyor') {
             const delBtn = document.createElement('button');
             delBtn.className = 'icon-btn delete';
             delBtn.title = 'Delete Record';
@@ -1898,7 +1898,7 @@ function editPatient(p) {
                 </div>
                 <div class="col-actions">
                     <button class="icon-btn" onclick="editBeneficiary('${id}')">Edit</button>
-                    ${userRole === 'admin' ? `<button class="icon-btn delete" onclick="deleteBeneficiary('${id}')">Delete</button>` : ''}
+                    ${userRole === 'admin' || userRole === 'surveyor' ? `<button class="icon-btn delete" onclick="deleteBeneficiary('${id}')">Delete</button>` : ''}
                 </div>
             `;
                 listEl.appendChild(div);

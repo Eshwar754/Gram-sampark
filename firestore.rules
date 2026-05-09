@@ -50,8 +50,11 @@ service cloud.firestore {
         && (request.auth.uid in get(/databases/$(database)/documents/villages/$(resource.data.village_id)).data.assigned_users
             || request.auth.token.email in get(/databases/$(database)/documents/villages/$(resource.data.village_id)).data.assigned_users);
 
-      // Surveyor cannot delete
-      allow delete: if false;
+      // Surveyor can delete from their assigned village
+      allow delete: if isSurveyor()
+        && resource.data.village_id != null
+        && (request.auth.uid in get(/databases/$(database)/documents/villages/$(resource.data.village_id)).data.assigned_users
+            || request.auth.token.email in get(/databases/$(database)/documents/villages/$(resource.data.village_id)).data.assigned_users);
     }
 
     // ACCESS REQUESTS
@@ -82,7 +85,8 @@ service cloud.firestore {
       allow update: if isSurveyor()
         && (resource.data.assignedSurveyorId == request.auth.uid || resource.data.assignedSurveyorEmail == request.auth.token.email);
 
-      allow delete: if false;
+      allow delete: if isSurveyor()
+        && (resource.data.assignedSurveyorId == request.auth.uid || resource.data.assignedSurveyorEmail == request.auth.token.email);
     }
 
   }
