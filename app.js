@@ -1235,7 +1235,7 @@ if (form) {
             nearest_healthcare: document.getElementById('nearest_healthcare').value.trim(),
 
             village: activeVillage ? activeVillage.name : document.getElementById('village').value.trim(),
-            village_id: activeVillage ? String(activeVillage.id) : (allVillagesCache.find(v => v.name === document.getElementById('village').value.trim())?.id || ''),
+            village_id: activeVillage ? String(activeVillage.id) : ([...allVillagesCache, ...userAssignedVillages].find(v => v.name === document.getElementById('village').value.trim())?.id || ''),
             gram_panchayat: document.getElementById('gram_panchayat').value.trim(),
             taluk: document.getElementById('taluk').value.trim(),
             district: document.getElementById('district').value.trim(),
@@ -1267,7 +1267,7 @@ if (form) {
             school_dropouts: document.getElementById('dropouts').value,
 
             assigned_by_email: currentUser.email, // Assign to current user
-            village_id: activeVillage ? String(activeVillage.id) : (allVillagesCache.find(v => v.name === document.getElementById('village').value.trim())?.id || ''),
+            village_id: activeVillage ? String(activeVillage.id) : ([...allVillagesCache, ...userAssignedVillages].find(v => v.name === document.getElementById('village').value.trim())?.id || ''),
             updated_at: serverTimestamp(),
             // Keep a client-side timestamp to perform our manual Last Write Wins check
             client_timestamp: Date.now()
@@ -2016,5 +2016,5 @@ function editPatient(p) {
             cursorGlow.style.transform = `translate3d(${glowX - (cursorGlow.offsetWidth / 2)}px, ${glowY - (cursorGlow.offsetHeight / 2)}px, 0)`;
         }
         requestAnimationFrame(animateGlow);
+    }
     animateGlow();
-}
