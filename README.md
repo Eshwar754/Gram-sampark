@@ -1,6 +1,6 @@
 # Gram-Sampark – Offline-First Rural Health Records
 
-This is a complete working project demonstrating an offline-first patient record system tailored for rural health workers operating in areas with limited or no internet connectivity. 
+This is a complete working project demonstrating an offline-first resident record system tailored for rural health workers operating in areas with limited or no internet connectivity. 
 
 ## 1. System Architecture Explanation
 
@@ -72,11 +72,11 @@ Using Chrome / Edge DevTools:
 2. Open **Developer Tools** (F12 or Ctrl+Shift+I).
 3. Go to the **Application** tab. Check the **Service Workers** section to ensure `sw.js` is activated.
 4. Go to the **Network** tab, check the **Offline** box (or select "Offline" from the throttling dropdown).
-5. Add a new patient record through the form. 
+5. Add a new resident record through the form. 
    - You will see the status indicator turn red ("Offline").
    - The UI will say "Pending..." for the timestamp since it hasn't reached the server, but the record will appear in the list!
 6. Uncheck the **Offline** box.
    - The status indicator will turn green ("Online & Syncing").
    - Firestore will automatically synchronize the queued write in the background.
    - The timestamp will eventually update to the actual server time. 
-7. Refresh the page while still offline to confirm the UI loads instantly from cache and the patient records are pulled from the local IndexedDB.
+7. Refresh the page while still offline to confirm the UI loads instantly from cache and the resident records are pulled from the local IndexedDB.

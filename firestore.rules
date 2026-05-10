@@ -16,7 +16,7 @@ service cloud.firestore {
     }
 
     function isSurveyor() {
-      return isSignedIn() && userDoc().data.role == "surveyor";
+      return isSignedIn() && (userDoc().data.role == "surveyor" || (userDoc().data.role == "user" && userDoc().data.status == "approved"));
     }
 
     // USERS
@@ -32,7 +32,7 @@ service cloud.firestore {
     }
 
     // PATIENTS (STRICT CONTROL)
-    match /patients/{patientId} {
+    match /residents/{residentId} {
 
       // Admin full access
       allow read, write, delete: if isAdmin();

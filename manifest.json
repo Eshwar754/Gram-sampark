@@ -1,7 +1,7 @@
 {
   "name": "Gram-Sampark Health Records",
   "short_name": "Gram-Sampark",
-  "description": "Offline-first application for rural health workers to collect patient data.",
+  "description": "Offline-first application for rural health workers to collect resident data.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",

@@ -62,7 +62,7 @@ let userStatus = 'pending';
 let userAssignedVillages = []; // Now stores [{id, name}]
 let activeVillage = null; // Now stores {id, name}
 let allVillagesCache = []; // Now stores [{id, name}]
-let patientUnsubscribe = null;
+let residentUnsubscribe = null;
 let villageUnsubscribe = null;
 let usersUnsubscribe = null;
 let pendingUsersUnsubscribe = null;
@@ -114,20 +114,81 @@ const panelViewData = document.getElementById('panel-view-data');
 const formVillageBanner = document.getElementById('form-village-banner');
 const formTargetVillage = document.getElementById('form-target-village');
 
-// Patient UI Elements
+// Resident UI Elements
 const statusIndicator = document.getElementById('status-indicator');
-const form = document.getElementById('patient-form');
-const patientListEl = document.getElementById('patient-list');
+const form = document.getElementById('resident-form');
+const residentListEl = document.getElementById('resident-list');
 const msgEl = document.getElementById('form-msg');
 const searchInput = document.getElementById('search-input');
 const clearBtn = document.getElementById('clear-btn');
 
 // Multi-step Form Logic
 let currentStep = 1;
-const totalSteps = 8;
+const totalSteps = 9;
 const nextBtn = document.getElementById('next-btn');
 const prevBtn = document.getElementById('prev-btn');
 const submitBtn = document.getElementById('submit-btn');
+
+let birthCertificateData = null;
+let birthCertificateType = null;
+
+const bcInput = document.getElementById('birth_certificate');
+const bcPreviewContainer = document.getElementById('bc-preview-container');
+const bcPreviewImg = document.getElementById('bc-preview-img');
+const bcPreviewPdf = document.getElementById('bc-preview-pdf');
+const bcRemoveBtn = document.getElementById('bc-remove-btn');
+const bcStatusBadge = document.getElementById('bc-status-badge');
+
+function updateBCPreview(status = 'Pending') {
+    if (birthCertificateData) {
+        bcPreviewContainer.style.display = 'block';
+        bcStatusBadge.textContent = status + ' (Upload)';
+        if (status === 'Approved') bcStatusBadge.className = 'badge badge-success';
+        else if (status === 'Rejected') bcStatusBadge.className = 'badge badge-danger';
+        else bcStatusBadge.className = 'badge badge-warning';
+
+        if (birthCertificateType === 'application/pdf') {
+            bcPreviewImg.style.display = 'none';
+            bcPreviewPdf.style.display = 'inline-block';
+            bcPreviewPdf.href = birthCertificateData;
+        } else {
+            bcPreviewPdf.style.display = 'none';
+            bcPreviewImg.style.display = 'block';
+            bcPreviewImg.src = birthCertificateData;
+        }
+    } else {
+        bcPreviewContainer.style.display = 'none';
+    }
+}
+
+if (bcInput) {
+    bcInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        if (file.size > 500 * 1024) {
+            alert("File is too large! Max 500KB.");
+            bcInput.value = '';
+            return;
+        }
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            birthCertificateData = event.target.result;
+            birthCertificateType = file.type;
+            updateBCPreview('Pending');
+        };
+        reader.readAsDataURL(file);
+    });
+}
+
+if (bcRemoveBtn) {
+    bcRemoveBtn.addEventListener('click', () => {
+        birthCertificateData = null;
+        birthCertificateType = null;
+        if (bcInput) bcInput.value = '';
+        updateBCPreview();
+    });
+}
+
 
 if (nextBtn) {
     nextBtn.addEventListener('click', () => {
@@ -183,7 +244,7 @@ function validateStep(step) {
                 errorMsg = 'Mobile must be exactly 10 digits.';
             } else if (input.id === 'pincode' && !/^[0-9]{6}$/.test(val)) {
                 errorMsg = 'PIN Code must be 6 digits.';
-            } else if (input.type === 'email' && input.id === 'patient_email' && val && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val)) {
+            } else if (input.type === 'email' && input.id === 'resident_email' && val && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val)) {
                 errorMsg = 'Invalid email format.';
             }
         }
@@ -314,8 +375,8 @@ function getFamilyData() {
     return members;
 }
 
-// Keep track of all fetched patients for searching
-let allPatients = [];
+// Keep track of all fetched residents for searching
+let allResidents = [];
 
 // Monitor Network Status
 function updateOnlineStatus() {
@@ -452,7 +513,7 @@ onAuthStateChanged(auth, async (user) => {
             ]);
             adminSetup();
             await fetchAssignedVillages(user);
-            setupPatientListener();
+            setupResidentListener();
             setupSchemesListener();
             setupBeneficiariesListener();
         } else if (userStatus === 'approved' || userRole === 'surveyor') {
@@ -468,7 +529,7 @@ onAuthStateChanged(auth, async (user) => {
             ]);
             userSetup();
             await fetchAssignedVillages(user);
-            setupPatientListener();
+            setupResidentListener();
             setupSchemesListener();
             setupBeneficiariesListener();
         } else {
@@ -522,7 +583,7 @@ onAuthStateChanged(auth, async (user) => {
         if (appContainer) appContainer.style.display = 'none';
         if (pendingSection) pendingSection.style.display = 'none';
 
-        if (patientUnsubscribe) patientUnsubscribe();
+        if (residentUnsubscribe) residentUnsubscribe();
         if (villageUnsubscribe) villageUnsubscribe();
         if (usersUnsubscribe) usersUnsubscribe();
         if (pendingUsersUnsubscribe) pendingUsersUnsubscribe();
@@ -563,44 +624,52 @@ function setupTabs(tabs) {
     });
 }
 
-function setupPatientListener() {
-    if (patientUnsubscribe) patientUnsubscribe();
+function setupResidentListener() {
+    if (residentUnsubscribe) residentUnsubscribe();
 
     let q;
     if (userRole === 'admin') {
         // Admins see everything
-        q = query(collection(db, "patients"), orderBy("updated_at", "desc"));
+        // Removed orderBy to ensure we fetch older documents that might be missing updated_at
+        q = query(collection(db, "residents"));
     } else {
         // Check if user has any assigned villages to avoid query errors
         if (userAssignedVillages && userAssignedVillages.length > 0) {
-            const villageIds = userAssignedVillages.map(v => v.id);
-            // Firestore rules use village_id for surveyors
+            const villageNames = userAssignedVillages.map(v => v.name);
+            // Use village name instead of ID for backward compatibility with old data
             q = query(
-                collection(db, "patients"),
-                where("village_id", "in", villageIds),
-                orderBy("updated_at", "desc")
+                collection(db, "residents"),
+                where("village", "in", villageNames)
             );
         } else {
             // If no villages are assigned, show nothing (or handle as needed)
-            renderPatients([]);
+            renderResidents([]);
             return;
         }
     }
 
-    patientUnsubscribe = onSnapshot(q, { includeMetadataChanges: true }, (snapshot) => {
-        allPatients = [];
+    residentUnsubscribe = onSnapshot(q, { includeMetadataChanges: true }, (snapshot) => {
+        allResidents = [];
         snapshot.forEach((docSnap) => {
             const data = docSnap.data();
             const source = docSnap.metadata.hasPendingWrites ? "Local" : "Server";
-            allPatients.push({ id: docSnap.id, source, ...data });
+            allResidents.push({ id: docSnap.id, source, ...data });
         });
-        renderPatients(allPatients);
+        
+        // Sort by updated_at descending in memory
+        allResidents.sort((a, b) => {
+            const tA = a.updated_at ? (a.updated_at.toMillis ? a.updated_at.toMillis() : a.updated_at) : 0;
+            const tB = b.updated_at ? (b.updated_at.toMillis ? b.updated_at.toMillis() : b.updated_at) : 0;
+            return tB - tA;
+        });
+
+        renderResidents(allResidents);
 
         if (userRole !== 'admin') {
             updateUserDashboardStats();
         }
     }, (error) => {
-        console.error("Patient list error:", error);
+        console.error("Resident list error:", error);
         // Note: You may need to create a composite index in Firebase Console 
         // for (village ASC, updated_at DESC)
     });
@@ -619,45 +688,85 @@ function adminSetup() {
             const data = docSnap.data();
             if (data.role === 'admin') return;
 
-            const div = document.createElement('div');
-            div.className = 'list-row';
-
-            const isApproved = data.status === 'approved';
-            const approvedOn = data.approved_at ? new Date(data.approved_at.toDate()).toLocaleDateString() : 'N/A';
-
-            div.innerHTML = `
-                <div class="col-name">
-                    <div class="primary-text">${escapeHTML(data.email)}</div>
-                    <div class="secondary-text">User ID: ${docSnap.id}</div>
-                </div>
-                <div class="col-info">
-                    <span class="badge ${isApproved ? 'badge-success' : 'badge-warning'}">${data.status.toUpperCase()}</span>
-                    <select onchange="updateUserRole('${docSnap.id}', this.value)" style="margin-left:10px; font-size:0.8rem;">
-                        <option value="user" ${data.role === 'user' ? 'selected' : ''}>User</option>
-                        <option value="surveyor" ${data.role === 'surveyor' ? 'selected' : ''}>Surveyor</option>
-                        <option value="admin" ${data.role === 'admin' ? 'selected' : ''}>Admin</option>
-                    </select>
-                </div>
-                <div class="col-location">
-                    ${isApproved ? `<div id="v-list-${docSnap.id}" style="font-size:0.85rem;">Loading...</div>` : '<span class="secondary-text">Pending</span>'}
-                </div>
-                <div class="col-actions">
-                    ${data.status !== 'approved' ? `<button class="icon-btn" onclick="approveUser('${docSnap.id}')">Approve</button>` : ''}
-                    <button class="icon-btn delete" onclick="revokeUser('${docSnap.id}', '${escapeHTML(data.email)}')">Revoke</button>
-                </div>
-            `;
+            // Guard against missing status field
+            const status = data.status || 'pending';
+            const isApproved = status === 'approved';
 
             if (isApproved) {
+                // Approved users go in the Manage System tab as a list-row
+                const div = document.createElement('div');
+                div.className = 'list-row';
+                div.innerHTML = `
+                    <div class="col-name">
+                        <div class="primary-text">${escapeHTML(data.name || data.email)}</div>
+                        <div class="secondary-text">${escapeHTML(data.email)}</div>
+                    </div>
+                    <div class="col-info">
+                        <span class="badge badge-success">APPROVED</span>
+                        <select onchange="updateUserRole('${docSnap.id}', this.value)" style="margin-top:6px; font-size:0.78rem; min-height:2.2rem; padding:0.3rem 2.5rem 0.3rem 0.75rem;">
+                            <option value="user" ${data.role === 'user' ? 'selected' : ''}>User</option>
+                            <option value="surveyor" ${data.role === 'surveyor' ? 'selected' : ''}>Surveyor</option>
+                            <option value="admin" ${data.role === 'admin' ? 'selected' : ''}>Admin</option>
+                        </select>
+                    </div>
+                    <div class="col-location">
+                        <div id="v-list-${docSnap.id}" style="font-size:0.85rem;">Loading...</div>
+                    </div>
+                    <div class="col-actions">
+                        <button class="icon-btn delete" onclick="revokeUser('${docSnap.id}', '${escapeHTML(data.email)}')">Revoke</button>
+                    </div>
+                `;
                 approvedUsersList.appendChild(div);
                 fetchUserVillages(data.email, `v-list-${docSnap.id}`);
-            } else {
+            } else if (status === 'pending') {
+                // Pending users use a prominent approval card
                 pendingApprovalCount++;
-                pendingUsersList.appendChild(div);
+                const card = document.createElement('div');
+                card.className = 'pending-approval-card';
+                card.innerHTML = `
+                    <div class="approval-card-info">
+                        <div class="approval-avatar">${escapeHTML((data.name || data.email || '?')[0]).toUpperCase()}</div>
+                        <div class="approval-details">
+                            <div class="approval-name">${escapeHTML(data.name || 'Unnamed User')}</div>
+                            <div class="approval-email">${escapeHTML(data.email)}</div>
+                            <div class="approval-meta">
+                                <span class="badge badge-warning">${status.toUpperCase()}</span>
+                                ${data.mobile ? `<span class="approval-phone">📱 ${escapeHTML(data.mobile)}</span>` : ''}
+                            </div>
+                            <div style="margin-top:8px;">
+                                <label style="font-size:0.78rem; margin-bottom:3px; display:block;">Role to assign:</label>
+                                <select id="role-select-${docSnap.id}" style="font-size:0.8rem; min-height:2.3rem; padding:0.3rem 2.5rem 0.3rem 0.75rem; width:100%;">
+                                    <option value="user" ${data.role === 'user' ? 'selected' : ''}>User</option>
+                                    <option value="surveyor" ${data.role === 'surveyor' ? 'selected' : ''}>Surveyor</option>
+                                    <option value="admin" ${data.role === 'admin' ? 'selected' : ''}>Admin</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="approval-card-actions">
+                        <button class="approval-btn approve-btn" onclick="approveUserWithRole('${docSnap.id}', 'role-select-${docSnap.id}')">
+                            <svg viewBox="0 0 24 24" fill="none" width="16" height="16"><path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                            Approve Account
+                        </button>
+                        <button class="approval-btn reject-btn" onclick="rejectUser('${docSnap.id}', '${escapeHTML(data.email)}')">
+                            <svg viewBox="0 0 24 24" fill="none" width="16" height="16"><path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg>
+                            Reject
+                        </button>
+                    </div>
+                `;
+                pendingUsersList.appendChild(card);
             }
         });
 
+        // Update pending badge in nav
+        const pendingBadgeEl = document.getElementById('pending-count-badge');
+        if (pendingBadgeEl) {
+            pendingBadgeEl.textContent = pendingApprovalCount > 0 ? pendingApprovalCount : '';
+            pendingBadgeEl.style.display = pendingApprovalCount > 0 ? 'inline-flex' : 'none';
+        }
+
         if (pendingApprovalCount === 0) {
-            pendingUsersList.innerHTML = '<div class="empty-state-card">No approvals pending.</div>';
+            pendingUsersList.innerHTML = '<div class="empty-state-card">✅ No pending approvals. All accounts are reviewed.</div>';
         }
     });
 
@@ -722,9 +831,9 @@ function adminSetup() {
         });
     });
 
-    // Quick listen to total patients for stat
-    onSnapshot(query(collection(db, 'patients')), (snap) => {
-        document.getElementById('stat-total-patients').textContent = snap.size;
+    // Quick listen to total residents for stat
+    onSnapshot(query(collection(db, 'residents')), (snap) => {
+        document.getElementById('stat-total-residents').textContent = snap.size;
     });
 }
 
@@ -906,6 +1015,21 @@ window.approveUser = async function (uid) {
     }
 };
 
+window.approveUserWithRole = async function (uid, roleSelectId) {
+    try {
+        const roleSelectEl = document.getElementById(roleSelectId);
+        const selectedRole = roleSelectEl ? roleSelectEl.value : 'user';
+        await setDoc(doc(db, 'users', uid), {
+            status: 'approved',
+            role: selectedRole,
+            approved_at: serverTimestamp()
+        }, { merge: true });
+        showAdminMsg(`User approved as ${selectedRole}!`, 'success');
+    } catch (e) {
+        showAdminMsg(e.message, 'error');
+    }
+};
+
 window.revokeUser = async function (uid, email) {
     try {
         await setDoc(doc(db, 'users', uid), { status: 'pending' }, { merge: true });
@@ -929,6 +1053,24 @@ window.revokeUser = async function (uid, email) {
         });
 
         showAdminMsg('User access revoked and returned to pending limit.', 'success');
+    } catch (e) {
+        showAdminMsg(e.message, 'error');
+    }
+};
+
+window.rejectUser = async function (uid, email) {
+    if (!confirm(`Are you sure you want to reject this account (${email})?`)) return;
+    try {
+        await setDoc(doc(db, 'users', uid), { status: 'rejected' }, { merge: true });
+
+        // Delete all access requests for this user
+        const aq = query(collection(db, 'access_requests'), where('user_email', '==', email));
+        const aSnap = await getDocs(aq);
+        aSnap.forEach(async (aDoc) => {
+            await deleteDoc(doc(db, 'access_requests', aDoc.id));
+        });
+
+        showAdminMsg('User account rejected.', 'success');
     } catch (e) {
         showAdminMsg(e.message, 'error');
     }
@@ -987,7 +1129,7 @@ async function fetchAssignedVillages(user) {
         });
 
         setupFormVillageInput(); // Re-render dropdown 
-        setupPatientListener(); // Re-render patient list based on new villages
+        setupResidentListener(); // Re-render resident list based on new villages
 
         if (userRole !== 'admin') {
             activeVillageSelect.innerHTML = '<option value="">Select Village...</option>';
@@ -1017,9 +1159,9 @@ async function fetchAssignedVillages(user) {
 }
 
 function updateUserDashboardStats() {
-    // Tally up from allPatients list
+    // Tally up from allResidents list
     const counts = {};
-    allPatients.forEach(p => {
+    allResidents.forEach(p => {
         if (p.village) {
             counts[p.village] = (counts[p.village] || 0) + 1;
         }
@@ -1083,9 +1225,9 @@ function setupFormVillageInput() {
     }
 }
 
-function renderPatients(patients) {
-    if (!patientListEl) return;
-    patientListEl.innerHTML = '';
+function renderResidents(residents) {
+    if (!residentListEl) return;
+    residentListEl.innerHTML = '';
 
     const fragment = document.createDocumentFragment();
 
@@ -1093,14 +1235,14 @@ function renderPatients(patients) {
     const headerRow = document.createElement('div');
     headerRow.className = 'list-header-row';
     headerRow.innerHTML = `
-        <div class="col-name">Patient Details</div>
+        <div class="col-name">Resident Details</div>
         <div class="col-info">Demographics</div>
         <div class="col-location">Location</div>
         <div class="col-actions">Actions</div>
     `;
     fragment.appendChild(headerRow);
 
-    patients.forEach(p => {
+    residents.forEach(p => {
         const div = document.createElement('div');
         div.className = 'list-row';
         const dateStr = p.updated_at ? new Date(p.client_timestamp || p.updated_at.toDate()).toLocaleDateString() : 'Pending';
@@ -1141,7 +1283,7 @@ function renderPatients(patients) {
                 <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
             </svg>
         `;
-        editBtn.onclick = (e) => { e.stopPropagation(); editPatient(p); };
+        editBtn.onclick = (e) => { e.stopPropagation(); editResident(p); };
         actionContainer.appendChild(editBtn);
 
         // PDF Button with Icon
@@ -1176,7 +1318,7 @@ function renderPatients(patients) {
             delBtn.onclick = (e) => {
                 e.stopPropagation();
                 if (confirm(`Delete ${p.name}?`)) {
-                    deleteDoc(doc(db, "patients", p.id)).then(() => applyPatientFilters());
+                    deleteDoc(doc(db, "residents", p.id)).then(() => applyResidentFilters());
                 }
             };
             actionContainer.appendChild(delBtn);
@@ -1185,7 +1327,7 @@ function renderPatients(patients) {
         fragment.appendChild(div);
     });
 
-    patientListEl.appendChild(fragment);
+    residentListEl.appendChild(fragment);
 }
 
 
@@ -1222,10 +1364,10 @@ if (form) {
         }
 
         const docId = document.getElementById('docId').value;
-        const patientData = {
+        const residentData = {
             name: document.getElementById('name').value.trim(),
             mobile: document.getElementById('mobile').value.trim(),
-            email: document.getElementById('patient_email').value.trim(),
+            email: document.getElementById('resident_email').value.trim(),
             dob: document.getElementById('dob').value,
             caste: document.getElementById('caste').value.trim(),
             gender: document.getElementById('gender').value,
@@ -1269,6 +1411,11 @@ if (form) {
             school_type: document.getElementById('school_type').value,
             school_dropouts: document.getElementById('dropouts').value,
 
+            birth_certificate_data: birthCertificateData || null,
+            birth_certificate_type: birthCertificateType || null,
+            birth_certificate_status: birthCertificateData ? (docId && allResidents.find(p => p.id === docId)?.birth_certificate_data === birthCertificateData ? allResidents.find(p => p.id === docId).birth_certificate_status : 'Pending') : 'None',
+
+
             assigned_by_email: currentUser.email, // Assign to current user
             village_id: activeVillage ? String(activeVillage.id) : ([...allVillagesCache, ...userAssignedVillages].find(v => v.name === document.getElementById('village').value.trim())?.id || ''),
             updated_at: serverTimestamp(),
@@ -1276,28 +1423,28 @@ if (form) {
             client_timestamp: Date.now()
         };
 
-        const sanitizedData = deepSanitize(patientData);
+        const sanitizedData = deepSanitize(residentData);
 
         try {
             if (docId) {
-                const patientRef = doc(db, "patients", docId);
-                const existingDoc = await getDoc(patientRef);
+                const residentRef = doc(db, "residents", docId);
+                const existingDoc = await getDoc(residentRef);
                 if (existingDoc.exists()) {
                     const existingData = existingDoc.data();
-                    if (existingData.client_timestamp && existingData.client_timestamp > patientData.client_timestamp) {
+                    if (existingData.client_timestamp && existingData.client_timestamp > residentData.client_timestamp) {
                         showMsg('Cannot update: Server has a newer version of this record.', 'error');
                         return;
                     }
                 }
                 // Fire and forget the save so UI updates immediately even if offline
-                setDoc(patientRef, sanitizedData, { merge: true })
+                setDoc(residentRef, sanitizedData, { merge: true })
                     .catch(e => console.error("Background sync error:", e));
-                showMsg('Patient record updated successfully! (Syncing in background)', 'success');
+                showMsg('Resident record updated successfully! (Syncing in background)', 'success');
             } else {
                 // Fire and forget the save so UI updates immediately even if offline
-                addDoc(collection(db, "patients"), sanitizedData)
+                addDoc(collection(db, "residents"), sanitizedData)
                     .catch(e => console.error("Background sync error:", e));
-                showMsg('New patient added successfully! (Syncing in background)', 'success');
+                showMsg('New resident added successfully! (Syncing in background)', 'success');
             }
 
             clearForm();
@@ -1317,7 +1464,7 @@ if (form) {
     });
 }
 
-function editPatient(p) {
+function editResident(p) {
         // Reset steps to 1 before populating
         currentStep = 1;
         document.querySelectorAll('.step.completed').forEach(el => el.classList.remove('completed'));
@@ -1332,7 +1479,7 @@ function editPatient(p) {
         document.getElementById('docId').value = p.id;
         document.getElementById('name').value = p.name || '';
         document.getElementById('mobile').value = p.mobile || '';
-        document.getElementById('patient_email').value = p.email || '';
+        document.getElementById('resident_email').value = p.email || '';
         document.getElementById('dob').value = p.dob || '';
         document.getElementById('caste').value = p.caste || '';
         document.getElementById('gender').value = p.gender || '';
@@ -1388,10 +1535,15 @@ function editPatient(p) {
         document.getElementById('school_type').value = p.school_type || '';
         document.getElementById('dropouts').value = p.school_dropouts || '';
 
-        const formSection = document.getElementById('patient-form-section');
+        const formSection = document.getElementById('resident-form-section');
         document.getElementById('modal-body-wrapper').appendChild(formSection);
         document.getElementById('general-modal').style.display = 'flex';
         formVillageBanner.style.display = 'none';
+
+        birthCertificateData = p.birth_certificate_data || null;
+        birthCertificateType = p.birth_certificate_type || null;
+        if (bcInput) bcInput.value = '';
+        updateBCPreview(p.birth_certificate_status || 'Pending');
     }
 
     if (clearBtn) {
@@ -1407,11 +1559,11 @@ function editPatient(p) {
         document.getElementById('general-modal').style.display = 'none';
 
         // Repark the form back where it belongs
-        const formSection = document.getElementById('patient-form-section');
+        const formSection = document.getElementById('resident-form-section');
         document.getElementById('panel-add-data').appendChild(formSection);
 
         // Repark the read-view back where it belongs 
-        const readView = document.getElementById('patient-read-view');
+        const readView = document.getElementById('resident-read-view');
         readView.style.display = 'none';
         document.body.appendChild(readView);
 
@@ -1427,7 +1579,7 @@ function editPatient(p) {
 
     function showReadModal(p) {
         const wrapper = document.getElementById('modal-body-wrapper');
-        const readView = document.getElementById('patient-read-view');
+        const readView = document.getElementById('resident-read-view');
         const grid = document.getElementById('read-grid');
 
         document.getElementById('read-title').textContent = `${escapeHTML(p.name)}'s Profile`;
@@ -1470,6 +1622,35 @@ function editPatient(p) {
 
         addItem('Highest Qual.', p.highest_qual);
 
+        if (p.birth_certificate_data) {
+            let docHtml = '';
+            if (p.birth_certificate_type === 'application/pdf') {
+                docHtml = `<a href="${p.birth_certificate_data}" target="_blank">View PDF Document</a>`;
+            } else {
+                docHtml = `<img src="${p.birth_certificate_data}" style="max-width: 100%; height: auto; border-radius: 4px; margin-top: 8px;" />`;
+            }
+            
+            let statusBadgeClass = 'badge badge-warning';
+            if (p.birth_certificate_status === 'Approved') statusBadgeClass = 'badge badge-success';
+            if (p.birth_certificate_status === 'Rejected') statusBadgeClass = 'badge badge-danger';
+            
+            let statusHtml = `<div>Status: <span class="${statusBadgeClass}">${p.birth_certificate_status || 'Pending'}</span></div>`;
+            
+            if (userRole === 'admin' && p.birth_certificate_status === 'Pending') {
+                statusHtml += `
+                    <div style="margin-top: 8px;">
+                        <button class="btn-sm primary" onclick="approveDocument('${p.id}')">Approve</button>
+                        <button class="btn-sm secondary" onclick="rejectDocument('${p.id}')">Reject</button>
+                    </div>
+                `;
+            }
+
+            const addHTMLItem = (label, val) => {
+                grid.innerHTML += `<div style="grid-column: span 2;"><strong>${label}:</strong><br/>${val}</div>`;
+            };
+            addHTMLItem('Birth Certificate', `${statusHtml}<br/>${docHtml}`);
+        }
+
         readView.style.display = 'block';
         wrapper.appendChild(readView);
         document.getElementById('general-modal').style.display = 'flex';
@@ -1496,6 +1677,11 @@ function editPatient(p) {
         prevBtn.style.display = 'none';
         nextBtn.style.display = 'inline-block';
         submitBtn.style.display = 'none';
+
+        birthCertificateData = null;
+        birthCertificateType = null;
+        if (bcInput) bcInput.value = '';
+        updateBCPreview();
     }
 
     function showMsg(msg, type) {
@@ -1517,12 +1703,12 @@ function editPatient(p) {
         };
     }
 
-    function applyPatientFilters() {
+    function applyResidentFilters() {
         const term = searchInput.value.toLowerCase();
         const filterSelect = document.getElementById('filter-village-select');
         const villageFilter = filterSelect ? filterSelect.value : '';
 
-        const filtered = allPatients.filter(p => {
+        const filtered = allResidents.filter(p => {
             let matchesSearch = true;
             let matchesVillage = true;
 
@@ -1540,18 +1726,18 @@ function editPatient(p) {
             return matchesSearch && matchesVillage;
         });
 
-        renderPatients(filtered);
+        renderResidents(filtered);
     }
 
-    const debouncedApplyPatientFilters = debounce(applyPatientFilters, 250);
+    const debouncedApplyResidentFilters = debounce(applyResidentFilters, 250);
 
     if (searchInput) {
-        searchInput.addEventListener('input', debouncedApplyPatientFilters);
+        searchInput.addEventListener('input', debouncedApplyResidentFilters);
     }
 
     const filterVillageSelect = document.getElementById('filter-village-select');
     if (filterVillageSelect) {
-        filterVillageSelect.addEventListener('change', applyPatientFilters);
+        filterVillageSelect.addEventListener('change', applyResidentFilters);
     }
 
     // PDF Generation
@@ -1924,7 +2110,7 @@ function editPatient(p) {
         const dropdown = document.getElementById('ben-citizen-id');
         if (!dropdown) return;
         dropdown.innerHTML = '<option value="">Choose Citizen...</option>';
-        allPatients.forEach(p => {
+        allResidents.forEach(p => {
             const opt = document.createElement('option');
             opt.value = p.id;
             opt.textContent = `${p.name} (${p.village})`;
@@ -1987,6 +2173,26 @@ function editPatient(p) {
             showMsg(e.message, 'error');
         }
     });
+
+    window.approveDocument = async function (id) {
+        try {
+            await setDoc(doc(db, 'residents', id), { birth_certificate_status: 'Approved' }, { merge: true });
+            document.getElementById('general-modal').style.display = 'none';
+        } catch (e) {
+            console.error('Error approving document:', e);
+            alert('Failed to approve document.');
+        }
+    };
+
+    window.rejectDocument = async function (id) {
+        try {
+            await setDoc(doc(db, 'residents', id), { birth_certificate_status: 'Rejected' }, { merge: true });
+            document.getElementById('general-modal').style.display = 'none';
+        } catch (e) {
+            console.error('Error rejecting document:', e);
+            alert('Failed to reject document.');
+        }
+    };
 
     const cursorGlow = document.getElementById('cursor-glow');
     if (cursorGlow) {

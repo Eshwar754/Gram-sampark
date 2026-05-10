@@ -286,7 +286,7 @@
                                         </svg>
                                     </div>
                                     <h3>Total Villagers</h3>
-                                    <div class="value" id="stat-total-patients">0</div>
+                                    <div class="value" id="stat-total-residents">0</div>
                                 </div>
                                 <div class="stat-card">
                                     <div class="stat-icon amber">
@@ -307,10 +307,10 @@
                                 <div class="section-heading">
                                     <div>
                                         <span class="eyebrow">Approvals</span>
-                                        <h2>Pending Users</h2>
+                                        <h2>Pending Users <span id="pending-count-badge" class="pending-badge" style="display:none;"></span></h2>
                                     </div>
                                 </div>
-                                <div id="pending-users-list" class="list-container"></div>
+                                <div id="pending-users-list" class="pending-approvals-container"></div>
                             </section>
 
                             <section class="panel-card">
@@ -419,7 +419,7 @@
                             <span>Targeting Village: <strong id="form-target-village">None</strong></span>
                         </div>
 
-                        <section id="patient-form-section" class="panel-card">
+                        <section id="resident-form-section" class="panel-card">
                             <div class="section-heading">
                                 <div>
                                     <span class="eyebrow">Structured Survey Workflow</span>
@@ -427,7 +427,7 @@
                                 </div>
                             </div>
 
-                            <form id="patient-form">
+                            <form id="resident-form">
                                 <input type="hidden" id="docId">
 
                                 <div class="multi-step-container">
@@ -444,6 +444,7 @@
                                                 <div class="step" id="step6-indicator" data-step="6">Economic</div>
                                                 <div class="step" id="step7-indicator" data-step="7">Facilities</div>
                                                 <div class="step" id="step8-indicator" data-step="8">Education</div>
+                                                <div class="step" id="step9-indicator" data-step="9">Documents</div>
                                             </div>
                                         </div>
                                     </aside>
@@ -465,8 +466,8 @@
                                                     <input type="tel" id="mobile" required pattern="[0-9]{10}">
                                                 </div>
                                                 <div class="form-group">
-                                                    <label for="patient_email">Email Address</label>
-                                                    <input type="email" id="patient_email">
+                                                    <label for="resident_email">Email Address</label>
+                                                    <input type="email" id="resident_email">
                                                 </div>
                                                 <div class="form-group">
                                                     <label for="dob">Date of Birth</label>
@@ -734,6 +735,25 @@
                                             </div>
                                         </div>
 
+                                        <div class="form-step" id="step-9" style="display: none;">
+                                            <div class="form-step-header">
+                                                <h3>Documents</h3>
+                                                <p>Upload official documents such as the birth certificate. Approvals are required from administrators.</p>
+                                            </div>
+                                            <div class="field-grid">
+                                                <div class="form-group field-span-2">
+                                                    <label for="birth_certificate">Birth Certificate (Image/PDF, max 500KB)</label>
+                                                    <input type="file" id="birth_certificate" accept="image/jpeg, image/png, application/pdf">
+                                                    <div id="bc-preview-container" style="margin-top: 10px; display: none;">
+                                                        <span class="badge badge-warning" id="bc-status-badge">Pending Upload</span>
+                                                        <img id="bc-preview-img" style="max-width: 100%; height: auto; border-radius: 4px; margin-top: 8px; display: none;" />
+                                                        <a id="bc-preview-pdf" href="#" target="_blank" style="display: none; margin-top: 8px;">View PDF</a>
+                                                        <button type="button" id="bc-remove-btn" class="btn-sm secondary" style="margin-top: 8px; display: block;">Remove File</button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
                                         <div class="form-actions">
                                             <button type="button" id="prev-btn" class="secondary"
                                                 style="display: none;">Back</button>
@@ -814,7 +834,7 @@
                                 </div>
                             </div>
 
-                            <div id="patient-list"></div>
+                            <div id="resident-list"></div>
                         </section>
                     </div>
                 </main>
@@ -826,7 +846,7 @@
         <div id="general-modal-content">
             <button id="close-modal-btn" aria-label="Close modal">&times;</button>
             <div id="modal-body-wrapper"></div>
-            <div id="patient-read-view" style="display: none;">
+            <div id="resident-read-view" style="display: none;">
                 <h2 id="read-title"></h2>
                 <div id="read-grid"></div>
             </div>
