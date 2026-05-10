@@ -831,6 +831,73 @@ function adminSetup() {
         });
     });
 
+    // Listen to pending documents
+    const dq = query(collection(db, 'residents'), where('birth_certificate_status', '==', 'Pending'));
+    onSnapshot(dq, (snapshot) => {
+        const pendingDocsList = document.getElementById('pending-docs-list');
+        if (!pendingDocsList) return;
+        pendingDocsList.innerHTML = '';
+        if (snapshot.empty) {
+            pendingDocsList.innerHTML = '<div class="empty-state-card">No pending document approvals.</div>';
+            return;
+        }
+        
+        snapshot.forEach(docSnap => {
+            const data = docSnap.data();
+            if (!data.birth_certificate_data) return;
+
+            const div = document.createElement('div');
+            div.className = 'list-row';
+            div.style.alignItems = 'center';
+            div.innerHTML = `
+                <div class="col-name">
+                    <div class="primary-text">${escapeHTML(data.name || 'Unknown')}</div>
+                    <div class="secondary-text">${escapeHTML(data.mobile || '')}</div>
+                </div>
+                <div class="col-info" style="grid-column: span 2;">
+                    <div class="primary-text">Birth Certificate Pending</div>
+                    <div class="secondary-text">Uploaded by ${escapeHTML(data.assigned_by_email || 'User')}</div>
+                </div>
+                <div class="col-location">
+                    <button class="btn-sm view-doc-btn">View Document</button>
+                </div>
+                <div class="col-actions">
+                    <button class="icon-btn approve-doc-btn" style="color:var(--success);" title="Approve">
+                        <svg viewBox="0 0 24 24" fill="none" width="16" height="16"><path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    </button>
+                    <button class="icon-btn delete reject-doc-btn" title="Reject">
+                        <svg viewBox="0 0 24 24" fill="none" width="16" height="16"><path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg>
+                    </button>
+                </div>
+            `;
+            
+            div.querySelector('.view-doc-btn').addEventListener('click', () => {
+                if (window.openDocumentData) {
+                    window.openDocumentData(data.birth_certificate_data, data.birth_certificate_type);
+                } else {
+                    const residentData = Object.assign({id: docSnap.id}, data);
+                    if (typeof showReadModal === 'function') {
+                        showReadModal(residentData);
+                    } else if (window.showReadModal) {
+                        window.showReadModal(residentData);
+                    } else {
+                        alert("View function not found.");
+                    }
+                }
+            });
+
+            div.querySelector('.approve-doc-btn').addEventListener('click', () => {
+                if (window.approveDocument) window.approveDocument(docSnap.id);
+            });
+
+            div.querySelector('.reject-doc-btn').addEventListener('click', () => {
+                if (window.rejectDocument) window.rejectDocument(docSnap.id);
+            });
+
+            pendingDocsList.appendChild(div);
+        });
+    });
+
     // Quick listen to total residents for stat
     onSnapshot(query(collection(db, 'residents')), (snap) => {
         document.getElementById('stat-total-residents').textContent = snap.size;
@@ -1073,6 +1140,37 @@ window.rejectUser = async function (uid, email) {
         showAdminMsg('User account rejected.', 'success');
     } catch (e) {
         showAdminMsg(e.message, 'error');
+    }
+};
+
+window.approveDocument = async function (docId) {
+    try {
+        await setDoc(doc(db, 'residents', docId), {
+            birth_certificate_status: 'Approved',
+            updated_at: serverTimestamp()
+        }, { merge: true });
+        alert('Document Approved successfully!');
+        const modal = document.getElementById('general-modal');
+        if (modal) modal.style.display = 'none';
+    } catch(e) {
+        alert(e.message);
+    }
+};
+
+window.rejectDocument = async function (docId) {
+    if (!confirm('Are you sure you want to reject this document? It will be deleted.')) return;
+    try {
+        await setDoc(doc(db, 'residents', docId), {
+            birth_certificate_status: 'Rejected',
+            birth_certificate_data: null,
+            birth_certificate_type: null,
+            updated_at: serverTimestamp()
+        }, { merge: true });
+        alert('Document Rejected.');
+        const modal = document.getElementById('general-modal');
+        if (modal) modal.style.display = 'none';
+    } catch(e) {
+        alert(e.message);
     }
 };
 
@@ -1624,17 +1722,21 @@ function editResident(p) {
 
         if (p.birth_certificate_data) {
             let docHtml = '';
-            if (p.birth_certificate_type === 'application/pdf') {
-                docHtml = `<a href="${p.birth_certificate_data}" target="_blank">View PDF Document</a>`;
-            } else {
-                docHtml = `<img src="${p.birth_certificate_data}" style="max-width: 100%; height: auto; border-radius: 4px; margin-top: 8px;" />`;
-            }
-            
             let statusBadgeClass = 'badge badge-warning';
             if (p.birth_certificate_status === 'Approved') statusBadgeClass = 'badge badge-success';
             if (p.birth_certificate_status === 'Rejected') statusBadgeClass = 'badge badge-danger';
             
             let statusHtml = `<div>Status: <span class="${statusBadgeClass}">${p.birth_certificate_status || 'Pending'}</span></div>`;
+
+            if (userRole === 'admin' || p.birth_certificate_status === 'Approved') {
+                if (p.birth_certificate_type === 'application/pdf') {
+                    docHtml = `<button class="btn-sm secondary" style="margin-top: 8px;" onclick="window.openDocumentData('${p.birth_certificate_data}', 'application/pdf')">View PDF Document</button>`;
+                } else {
+                    docHtml = `<div style="margin-top: 8px; cursor: pointer;" onclick="window.openDocumentData('${p.birth_certificate_data}', 'image')"><img src="${p.birth_certificate_data}" style="max-width: 100%; height: auto; border-radius: 4px;" title="Click to view full size" /></div>`;
+                }
+            } else {
+                docHtml = `<em>Document is pending admin approval and cannot be viewed yet.</em>`;
+            }
             
             if (userRole === 'admin' && p.birth_certificate_status === 'Pending') {
                 statusHtml += `
@@ -1920,6 +2022,22 @@ function editResident(p) {
         }
         addField("School Dropouts in Family", p.school_dropouts, 14, true);
 
+        if (p.birth_certificate_data && p.birth_certificate_status === 'Approved') {
+            addSectionHeader("7. Attached Documents");
+            if (p.birth_certificate_type && p.birth_certificate_type.includes('image')) {
+                // To avoid errors with very large images or dimensions, we just attach what we can
+                try {
+                    checkPageBreak(110);
+                    doc.addImage(p.birth_certificate_data, 'JPEG', 14, y, 180, 100);
+                    y += 105;
+                } catch(e) {
+                    addField("Birth Certificate", "Attached (Image could not be embedded)", 14, true);
+                }
+            } else {
+                addField("Birth Certificate", "Attached (PDF or Unsupported format for direct embed)", 14, true);
+            }
+        }
+
         // Footer
         const addFooter = () => {
             const pageCount = doc.internal.getNumberOfPages();
@@ -2191,6 +2309,34 @@ function editResident(p) {
         } catch (e) {
             console.error('Error rejecting document:', e);
             alert('Failed to reject document.');
+        }
+    };
+
+    window.openDocumentData = function(dataStr, type) {
+        if (!dataStr) return;
+        try {
+            fetch(dataStr)
+                .then(res => res.blob())
+                .then(blob => {
+                    const url = URL.createObjectURL(blob);
+                    window.open(url, '_blank');
+                })
+                .catch(err => {
+                    console.error("Blob conversion failed, fallback to iframe/img", err);
+                    const w = window.open("");
+                    if (!w) {
+                        alert("Popup blocked! Please allow popups for this site to view the document.");
+                        return;
+                    }
+                    if (type === 'application/pdf') {
+                        w.document.write('<iframe src="' + dataStr + '" width="100%" height="100%" style="border:none;"></iframe>');
+                    } else {
+                        w.document.write('<img src="' + dataStr + '" style="max-width: 100%;">');
+                    }
+                });
+        } catch(e) {
+            console.error("Failed to open document", e);
+            alert("Could not open document data.");
         }
     };
 
