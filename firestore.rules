@@ -46,15 +46,38 @@ service cloud.firestore {
             || request.auth.token.email in get(/databases/$(database)/documents/villages/$(request.resource.data.village_id)).data.assigned_users);
 
       allow update: if isSurveyor()
-        && resource.data.village_id != null
-        && (request.auth.uid in get(/databases/$(database)/documents/villages/$(resource.data.village_id)).data.assigned_users
-            || request.auth.token.email in get(/databases/$(database)/documents/villages/$(resource.data.village_id)).data.assigned_users);
+        && (
+          !('village_id' in resource.data) 
+          || resource.data.village_id == null 
+          || resource.data.village_id == ""
+          || (
+              exists(/databases/$(database)/documents/villages/$(resource.data.village_id)) 
+              && (
+                 request.auth.uid in get(/databases/$(database)/documents/villages/$(resource.data.village_id)).data.assigned_users
+                 || request.auth.token.email in get(/databases/$(database)/documents/villages/$(resource.data.village_id)).data.assigned_users
+              )
+             )
+        );
 
-      // Surveyor can delete from their assigned village
+      // Surveyor can delete from their assigned village or if village is missing/invalid
       allow delete: if isSurveyor()
-        && resource.data.village_id != null
-        && (request.auth.uid in get(/databases/$(database)/documents/villages/$(resource.data.village_id)).data.assigned_users
-            || request.auth.token.email in get(/databases/$(database)/documents/villages/$(resource.data.village_id)).data.assigned_users);
+        && (
+          !('village_id' in resource.data) 
+          || resource.data.village_id == null 
+          || resource.data.village_id == ""
+          || (
+              exists(/databases/$(database)/documents/villages/$(resource.data.village_id)) 
+              && (
+                 request.auth.uid in get(/databases/$(database)/documents/villages/$(resource.data.village_id)).data.assigned_users
+                 || request.auth.token.email in get(/databases/$(database)/documents/villages/$(resource.data.village_id)).data.assigned_users
+              )
+             )
+        );
+    }
+
+    // DECEASED RECORDS
+    match /deceased_records/{recordId} {
+      allow read, write: if isAdmin() || isSurveyor();
     }
 
     // ACCESS REQUESTS

@@ -1415,8 +1415,12 @@ function renderResidents(residents) {
             `;
             delBtn.onclick = (e) => {
                 e.stopPropagation();
-                if (confirm(`Delete ${p.name}?`)) {
-                    deleteDoc(doc(db, "residents", p.id)).then(() => applyResidentFilters());
+                if (window.openDeleteModal) {
+                    window.openDeleteModal(p.id, p.name);
+                } else {
+                    if (confirm(`Delete ${p.name}?`)) {
+                        deleteDoc(doc(db, "residents", p.id)).then(() => applyResidentFilters());
+                    }
                 }
             };
             actionContainer.appendChild(delBtn);
@@ -2339,6 +2343,118 @@ function editResident(p) {
             alert("Could not open document data.");
         }
     };
+
+    // Deletion Modal Logic
+    const deleteModal = document.getElementById('delete-modal');
+    const deleteForm = document.getElementById('delete-resident-form');
+    const deleteReasonSelect = document.getElementById('delete-reason-select');
+    const dcUploadSection = document.getElementById('death-certificate-upload-section');
+    const dcFileInput = document.getElementById('death-certificate-file');
+    const cancelDeleteBtn = document.getElementById('cancel-delete-btn');
+    const closeDeleteBtn = document.getElementById('close-delete-modal-btn');
+    const deleteError = document.getElementById('delete-modal-error');
+    
+    let currentDeleteId = null;
+    let deathCertificateBase64 = null;
+    let deathCertificateType = null;
+
+    window.openDeleteModal = function(id, name) {
+        currentDeleteId = id;
+        document.getElementById('delete-modal-desc').textContent = `You are about to delete the record for ${escapeHTML(name)}. Please provide a reason.`;
+        document.getElementById('delete-resident-id').value = id;
+        deleteForm.reset();
+        deleteReasonSelect.dispatchEvent(new Event('change'));
+        deathCertificateBase64 = null;
+        deathCertificateType = null;
+        deleteError.textContent = '';
+        deleteModal.style.display = 'flex';
+    };
+
+    const closeDeleteModal = () => {
+        deleteModal.style.display = 'none';
+        currentDeleteId = null;
+    };
+
+    if (cancelDeleteBtn) cancelDeleteBtn.addEventListener('click', closeDeleteModal);
+    if (closeDeleteBtn) closeDeleteBtn.addEventListener('click', closeDeleteModal);
+
+    if (deleteReasonSelect) {
+        deleteReasonSelect.addEventListener('change', (e) => {
+            if (e.target.value === 'deceased') {
+                dcUploadSection.style.display = 'block';
+                dcFileInput.required = true;
+            } else {
+                dcUploadSection.style.display = 'none';
+                dcFileInput.required = false;
+                dcFileInput.value = '';
+                deathCertificateBase64 = null;
+                deathCertificateType = null;
+            }
+        });
+    }
+
+    if (dcFileInput) {
+        dcFileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            if (file.size > 500 * 1024) {
+                deleteError.textContent = 'File too large (max 500KB)';
+                dcFileInput.value = '';
+                return;
+            }
+            deleteError.textContent = '';
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                deathCertificateBase64 = event.target.result;
+                deathCertificateType = file.type;
+            };
+            reader.readAsDataURL(file);
+        });
+    }
+
+    if (deleteForm) {
+        deleteForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            if (!currentDeleteId) return;
+            const reason = deleteReasonSelect.value;
+            if (!reason) {
+                deleteError.textContent = 'Please select a reason.';
+                return;
+            }
+            
+            try {
+                // If deceased, we might want to save to a deceased collection, but user said "ask him to upload the death certificate of that person and delete the data".
+                // We'll fetch current data, store it in deceased_records, then delete from residents.
+                const residentDoc = await getDoc(doc(db, 'residents', currentDeleteId));
+                
+                if (reason === 'deceased') {
+                    if (!deathCertificateBase64) {
+                        deleteError.textContent = 'Please upload a death certificate.';
+                        return;
+                    }
+                    if (residentDoc.exists()) {
+                        const residentData = residentDoc.data();
+                        residentData.death_certificate_data = deathCertificateBase64;
+                        residentData.death_certificate_type = deathCertificateType;
+                        residentData.deleted_reason = 'deceased';
+                        residentData.deleted_at = serverTimestamp();
+                        residentData.deleted_by = currentUser ? currentUser.email : 'Unknown';
+                        await setDoc(doc(db, 'deceased_records', currentDeleteId), residentData);
+                    }
+                } else if (reason === 'mistake') {
+                    // Optional: log mistake
+                }
+                
+                // Finally, delete the record from residents
+                await deleteDoc(doc(db, 'residents', currentDeleteId));
+                closeDeleteModal();
+                if (typeof applyResidentFilters === 'function') applyResidentFilters();
+            } catch (err) {
+                console.error("Deletion failed:", err);
+                deleteError.textContent = "Error deleting record. " + err.message;
+            }
+        });
+    }
 
     const cursorGlow = document.getElementById('cursor-glow');
     if (cursorGlow) {
