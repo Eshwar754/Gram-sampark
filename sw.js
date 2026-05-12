@@ -1,4 +1,4 @@
-const CACHE_NAME = 'gram-sampark-v4';
+const CACHE_NAME = 'gram-sampark-v5';
 const ASSETS = [
   '/',
   '/index.html',
@@ -8,6 +8,7 @@ const ASSETS = [
 ];
 
 self.addEventListener('install', event => {
+  self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE_NAME).then(cache => {
       console.log('Opened cache');
@@ -37,6 +38,8 @@ self.addEventListener('activate', event => {
         cacheNames.filter(name => name !== CACHE_NAME)
           .map(name => caches.delete(name))
       );
+    }).then(() => {
+      return self.clients.claim();
     })
   );
 });
