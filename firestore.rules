@@ -106,10 +106,22 @@ service cloud.firestore {
         && (request.resource.data.assignedSurveyorId == request.auth.uid || request.resource.data.assignedSurveyorEmail == request.auth.token.email);
 
       allow update: if isSurveyor()
-        && (resource.data.assignedSurveyorId == request.auth.uid || resource.data.assignedSurveyorEmail == request.auth.token.email);
+        && (
+            (resource.data.assignedSurveyorId == request.auth.uid || resource.data.assignedSurveyorEmail == request.auth.token.email) ||
+            (resource.data.citizenVillageId != null && 
+              (request.auth.uid in get(/databases/$(database)/documents/villages/$(resource.data.citizenVillageId)).data.assigned_users || 
+               request.auth.token.email in get(/databases/$(database)/documents/villages/$(resource.data.citizenVillageId)).data.assigned_users)
+            )
+           );
 
       allow delete: if isSurveyor()
-        && (resource.data.assignedSurveyorId == request.auth.uid || resource.data.assignedSurveyorEmail == request.auth.token.email);
+        && (
+            (resource.data.assignedSurveyorId == request.auth.uid || resource.data.assignedSurveyorEmail == request.auth.token.email) ||
+            (resource.data.citizenVillageId != null && 
+              (request.auth.uid in get(/databases/$(database)/documents/villages/$(resource.data.citizenVillageId)).data.assigned_users || 
+               request.auth.token.email in get(/databases/$(database)/documents/villages/$(resource.data.citizenVillageId)).data.assigned_users)
+            )
+           );
     }
 
   }

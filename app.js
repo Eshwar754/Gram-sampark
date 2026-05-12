@@ -2174,11 +2174,6 @@ function editResident(p) {
     let allBeneficiaries = [];
     function setupBeneficiariesListener() {
         let q = query(collection(db, 'beneficiaries'), orderBy('updated_at', 'desc'));
-        if (userRole === 'surveyor') {
-            // Rules allow read all for surveyors, but we can filter for UX
-            // However, if we want to follow the rules strictly for creation:
-            // Surveyor can only create/update if assignedSurveyorId == request.auth.uid
-        }
 
         onSnapshot(q, (snapshot) => {
             allBeneficiaries = [];
@@ -2188,6 +2183,14 @@ function editResident(p) {
             snapshot.forEach(docSnap => {
                 const data = docSnap.data();
                 const id = docSnap.id;
+
+                if (userRole !== 'admin') {
+                    const bVillage = data.citizenVillage || (allResidents.find(r => r.id === data.citizenId)?.village);
+                    if (!bVillage || !userAssignedVillages.some(v => v.name === bVillage)) {
+                        return;
+                    }
+                }
+
                 allBeneficiaries.push({ id, ...data });
 
                 const schemeName = allSchemes.find(s => s.id === data.schemeId)?.name || 'Unknown Scheme';
@@ -2206,7 +2209,7 @@ function editResident(p) {
                 </div>
                 <div class="col-actions">
                     <button class="icon-btn" onclick="editBeneficiary('${id}')">Edit</button>
-                    ${userRole === 'admin' || userRole === 'surveyor' ? `<button class="icon-btn delete" onclick="deleteBeneficiary('${id}')">Delete</button>` : ''}
+                    <button class="icon-btn delete" onclick="deleteBeneficiary('${id}')">Delete</button>
                 </div>
             `;
                 listEl.appendChild(div);
@@ -2260,9 +2263,9 @@ function editResident(p) {
         if (!confirm('Remove this beneficiary application?')) return;
         try {
             await deleteDoc(doc(db, 'beneficiaries', id));
-            showMsg('Beneficiary removed', 'success');
+            alert('Beneficiary removed successfully');
         } catch (e) {
-            showMsg(e.message, 'error');
+            alert('Error deleting beneficiary: ' + e.message);
         }
     };
 
@@ -2273,9 +2276,15 @@ function editResident(p) {
         const selectedOption = citizenSelect.options[citizenSelect.selectedIndex];
         const citizenName = selectedOption ? selectedOption.text.split(' (')[0] : '';
 
+        const citizen = allResidents.find(r => r.id === citizenSelect.value);
+        const citizenVillage = citizen ? citizen.village : '';
+        const citizenVillageId = citizen ? citizen.village_id : '';
+
         const data = {
             citizenId: citizenSelect.value,
             citizenName: citizenName,
+            citizenVillage: citizenVillage,
+            citizenVillageId: citizenVillageId,
             schemeId: document.getElementById('ben-scheme-id').value,
             status: document.getElementById('ben-status').value,
             notes: document.getElementById('ben-notes').value,
