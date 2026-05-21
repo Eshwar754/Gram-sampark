@@ -1662,12 +1662,32 @@ function editResident(p) {
 
         // Repark the form back where it belongs
         const formSection = document.getElementById('resident-form-section');
-        document.getElementById('panel-add-data').appendChild(formSection);
+        if (formSection) {
+            document.getElementById('panel-add-data').appendChild(formSection);
+        }
 
         // Repark the read-view back where it belongs 
         const readView = document.getElementById('resident-read-view');
-        readView.style.display = 'none';
-        document.body.appendChild(readView);
+        if (readView) {
+            readView.style.display = 'none';
+            document.body.appendChild(readView);
+        }
+
+        // Repark the scheme form back where it belongs
+        const schemeForm = document.getElementById('scheme-form-container');
+        if (schemeForm) {
+            schemeForm.style.display = 'none';
+            const modalContent = document.getElementById('general-modal-content');
+            if (modalContent) modalContent.appendChild(schemeForm);
+        }
+
+        // Repark the beneficiary form back where it belongs
+        const benForm = document.getElementById('beneficiary-form-container');
+        if (benForm) {
+            benForm.style.display = 'none';
+            const modalContent = document.getElementById('general-modal-content');
+            if (modalContent) modalContent.appendChild(benForm);
+        }
 
         if (activeVillage) {
             formVillageBanner.style.display = 'flex';
@@ -2308,7 +2328,7 @@ function editResident(p) {
     window.approveDocument = async function (id) {
         try {
             await setDoc(doc(db, 'residents', id), { birth_certificate_status: 'Approved' }, { merge: true });
-            document.getElementById('general-modal').style.display = 'none';
+            closeModal();
         } catch (e) {
             console.error('Error approving document:', e);
             alert('Failed to approve document.');
@@ -2318,7 +2338,7 @@ function editResident(p) {
     window.rejectDocument = async function (id) {
         try {
             await setDoc(doc(db, 'residents', id), { birth_certificate_status: 'Rejected' }, { merge: true });
-            document.getElementById('general-modal').style.display = 'none';
+            closeModal();
         } catch (e) {
             console.error('Error rejecting document:', e);
             alert('Failed to reject document.');
