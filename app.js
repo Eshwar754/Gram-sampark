@@ -822,9 +822,9 @@ function adminSetup() {
                 <div class="col-info">
                     <div class="primary-text">${escapeHTML(data.village)}</div>
                 </div>
-                <div class="col-actions" style="grid-column: span 2; display: flex; justify-content: flex-end; gap: 0.5rem; width: 100%;">
-                    <button class="icon-btn" style="min-width: 90px;" onclick="approveAccess('${docSnap.id}', '${data.user_uid}', '${escapeHTML(data.user_email)}', '${escapeHTML(data.village)}')">Approve</button>
-                    <button class="icon-btn delete" style="min-width: 90px;" onclick="rejectAccess('${docSnap.id}')">Revoke</button>
+                <div class="col-actions">
+                    <button class="icon-btn" onclick="approveAccess('${docSnap.id}', '${data.user_uid}', '${escapeHTML(data.user_email)}', '${escapeHTML(data.village)}')">Approve</button>
+                    <button class="icon-btn delete" onclick="rejectAccess('${docSnap.id}')">Revoke</button>
                 </div>
             `;
             villageRequestsList.appendChild(div);

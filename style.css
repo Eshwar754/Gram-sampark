@@ -2639,3 +2639,114 @@ button.secondary:hover {
         flex: 1;
     }
 }
+
+/* ============================================================
+   ACCESS CONTROL / VILLAGE REQUESTS RESPONSIVE STYLING
+   ============================================================ */
+#village-requests-list .list-row {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    gap: 1.25rem !important;
+    min-width: 0 !important; /* Overrides default 700px min-width */
+    width: 100% !important;
+    padding: 1.1rem 1.4rem !important;
+    background: #fff !important;
+    border: 1px solid var(--soft-border-strong) !important;
+    border-radius: 20px !important;
+    box-sizing: border-box !important;
+}
+
+#village-requests-list .list-row:hover {
+    border-color: var(--primary) !important;
+    box-shadow: var(--shadow-sm) !important;
+    transform: translateY(-2px) !important;
+}
+
+#village-requests-list .list-row .col-name {
+    flex: 1.5 1 150px !important;
+    min-width: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+}
+
+#village-requests-list .list-row .col-name .primary-text {
+    font-weight: 700 !important;
+    color: #0B1324 !important;
+    text-overflow: ellipsis !important;
+    overflow: hidden !important;
+    white-space: nowrap !important;
+}
+
+#village-requests-list .list-row .col-info {
+    flex: 1 1 100px !important;
+    min-width: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+}
+
+#village-requests-list .list-row .col-info .primary-text {
+    font-weight: 700 !important;
+    color: #0B1324 !important;
+    text-overflow: ellipsis !important;
+    overflow: hidden !important;
+    white-space: nowrap !important;
+}
+
+#village-requests-list .list-row .col-actions {
+    flex: 0 0 auto !important;
+    display: flex !important;
+    gap: 0.5rem !important;
+    align-items: center !important;
+    justify-content: flex-end !important;
+    min-width: fit-content !important;
+}
+
+#village-requests-list .list-row .col-actions .icon-btn {
+    min-width: 90px !important;
+    min-height: 2.2rem !important;
+    padding: 0.35rem 0.95rem !important;
+    font-size: 0.85rem !important;
+    font-weight: 600 !important;
+    border-radius: 10px !important;
+    transition: all var(--transition) !important;
+}
+
+@media (max-width: 768px) {
+    #village-requests-list .list-row {
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 0.8rem !important;
+        padding: 1.25rem 1rem !important;
+    }
+
+    #village-requests-list .list-row .col-name,
+    #village-requests-list .list-row .col-info {
+        flex: 1 1 auto !important;
+        width: 100% !important;
+    }
+
+    #village-requests-list .list-row .col-name .primary-text,
+    #village-requests-list .list-row .col-info .primary-text {
+        white-space: normal !important;
+        word-break: break-all !important;
+    }
+
+    #village-requests-list .list-row .col-actions {
+        width: 100% !important;
+        justify-content: space-between !important;
+        margin-top: 0.6rem !important;
+        padding-top: 0.8rem !important;
+        border-top: 1px dashed rgba(148, 163, 184, 0.2) !important;
+    }
+
+    #village-requests-list .list-row .col-actions .icon-btn {
+        flex: 1 !important;
+        text-align: center !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+    }
+}
+
